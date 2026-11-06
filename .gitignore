@@ -1,0 +1,27 @@
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Entornos virtuales y cachés de Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Artefactos y datos generados
+dist/
+models/
+data/
+manuals/
+*.db
+*.db-wal
+*.db-shm
+
+# Cobertura y herramientas
+.coverage
+htmlcov/
+.DS_Store

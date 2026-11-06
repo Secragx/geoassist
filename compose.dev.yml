@@ -1,0 +1,19 @@
+# Overrides para desarrollo local.
+#
+#   docker compose -f compose.yml -f compose.dev.yml --profile dev up
+#
+# Monta el código fuente (solo lectura) y activa ngrok. El paquete instalado en
+# la imagen queda en `.venv`; `PYTHONPATH` hace que el código montado tenga
+# prioridad sin reconstruir la imagen.
+
+services:
+  api:
+    environment:
+      APP_ENV: development
+      PYTHONPATH: /app/src
+    volumes:
+      - geoassist_data:/data
+      - ./src/geoassist:/app/src/geoassist:ro
+
+  ngrok:
+    profiles: !reset []

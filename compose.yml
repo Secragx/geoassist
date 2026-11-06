@@ -1,0 +1,92 @@
+name: geoassist
+
+x-api-common: &api-common
+  image: geoassist-api:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      MODELS_ARTIFACT_URL: ${MODELS_ARTIFACT_URL:-}
+      MODELS_ARTIFACT_SHA256: ${MODELS_ARTIFACT_SHA256:-}
+  env_file:
+    - path: .env
+      required: false
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=256m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  mem_limit: 3g
+  cpus: 2
+
+services:
+  api:
+    <<: *api-common
+    command:
+      - uvicorn
+      - geoassist.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+    environment:
+      DATA_DIR: /data
+      MANUALS_DIR: /manuals
+    volumes:
+      - geoassist_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "python", "-m", "geoassist.healthcheck", "liveness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # Sin puertos publicados: solo caddy (prod) o ngrok (dev) exponen la API.
+
+  caddy:
+    image: caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17
+    profiles: ["prod"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      GEOASSIST_DOMAIN: ${GEOASSIST_DOMAIN:-localhost}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - internal
+
+  ngrok:
+    image: ngrok/ngrok:3.39.13-alpine@sha256:a51a7637a70be573615b01852af0419c4ab9dc857601b3d61ea2a082be3ec0d3
+    profiles: ["dev"]
+    restart: unless-stopped
+    command: ["http", "api:8000", "--log=stdout"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  geoassist_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge
