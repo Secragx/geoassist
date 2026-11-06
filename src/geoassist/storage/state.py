@@ -173,12 +173,18 @@ class StateStore:
         return json.loads(row[0])
 
     def cache_response(self, activity_id: str, response: dict, now: datetime) -> None:
-        """Guarda la respuesta formateada de una actividad para idempotencia."""
+        """Guarda o actualiza la respuesta formateada de una actividad para idempotencia."""
 
         created_at = _isoformat(now)
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO activities (activity_id, response, created_at) VALUES (?, ?, ?)",
+                """
+                INSERT INTO activities (activity_id, response, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(activity_id) DO UPDATE SET
+                    response = excluded.response,
+                    created_at = excluded.created_at
+                """,
                 (activity_id, json.dumps(response), created_at),
             )
             conn.commit()

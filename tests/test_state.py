@@ -77,5 +77,15 @@ def test_activity_cache_expires(tmp_path):
     assert store.get_cached_response("act1", NOW + timedelta(hours=25)) is None
 
 
+def test_cache_response_is_idempotent(tmp_path):
+    store = StateStore(tmp_path / "state.db")
+    store.cache_response("act1", {"type": "message", "text": "primera"}, NOW)
+    store.cache_response("act1", {"type": "message", "text": "segunda"}, NOW)
+    assert store.get_cached_response("act1", NOW) == {
+        "type": "message",
+        "text": "segunda",
+    }
+
+
 def test_session_key_uses_default_tenant():
     assert session_key(None, "c", "u") == "default|c|u"
