@@ -24,6 +24,17 @@ if TYPE_CHECKING:
     from geoassist.rag.embeddings import Embedder
     from geoassist.rag.tokenization import TokenCounter
 
+_PROJECT_MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations" / "corpus"
+
+
+def _resolve_migrations_dir(repo_root: Path) -> Path:
+    """Usa las migraciones del repo si existen; si no, las del proyecto."""
+
+    repo_migrations = Path(repo_root).resolve() / "migrations" / "corpus"
+    if repo_migrations.is_dir():
+        return repo_migrations
+    return _PROJECT_MIGRATIONS_DIR
+
 
 @dataclass(frozen=True, slots=True)
 class SkippedRecord:
@@ -68,7 +79,7 @@ class Ingestor:
         self._migrations_dir = (
             Path(migrations_dir)
             if migrations_dir is not None
-            else Path(loader.repo_root) / "migrations" / "corpus"
+            else _resolve_migrations_dir(loader.repo_root)
         )
 
     def build(self, version_id: str, output_dir: Path) -> IngestReport:
