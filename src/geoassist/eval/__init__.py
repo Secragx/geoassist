@@ -10,6 +10,11 @@ from geoassist.eval.metrics import (
     ndcg_at_k,
     recall_at_k,
 )
+from geoassist.eval.runner import (
+    EvaluationReport,
+    EvaluationResult,
+    EvaluationRunner,
+)
 
 __all__ = [
     "EvalMetrics",
@@ -18,4 +23,7 @@ __all__ = [
     "mean_reciprocal_rank",
     "ndcg_at_k",
     "recall_at_k",
+    "EvaluationReport",
+    "EvaluationResult",
+    "EvaluationRunner",
 ]

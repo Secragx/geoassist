@@ -1,0 +1,2 @@
+{"question": "¿Cómo cargo un lote en Geopos?", "expected_answer": "cargar", "expected_sources": ["a.md"], "app_hint": "geopos"}
+{"question": "¿Cómo genero un reporte en Geopricer?", "expected_answer": "reporte", "expected_sources": ["b.md"], "app_hint": "geopricer"}
