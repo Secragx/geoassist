@@ -3,6 +3,10 @@
 El reranker consume pares (consulta, pasaje), obtiene el logit del modelo y
 lo transforma con una sigmoide numéricamente estable para devolver una puntuación
 entre 0 y 1 por pasaje.
+
+La sesión se inspecciona para saber qué entradas espera: siempre se envían
+``input_ids`` y ``attention_mask``, y ``token_type_ids`` se incluye únicamente
+cuando el modelo la declara.
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ class Reranker(Protocol):
 class _Encoding(Protocol):
     ids: list[int]
     attention_mask: list[int]
+    type_ids: list[int]
 
 
 class _Tokenizer(Protocol):
@@ -71,14 +76,20 @@ def sigmoid(x: np.ndarray) -> np.ndarray:
 
 
 def _resolve_pad_id(tokenizer: _Tokenizer) -> int:
-    """Obtiene el id de ``<pad>`` del vocabulario del tokenizer."""
+    """Obtiene el id de ``<pad>`` del vocabulario del tokenizer.
+
+    Si el tokenizer no expone el token de relleno se lanza un error en lugar de
+    asumir ``0``, que podría ser un id válido para otro token.
+    """
 
     token_to_id = getattr(tokenizer, "token_to_id", None)
-    if callable(token_to_id):
-        pad_id = token_to_id(_PAD_TOKEN)
-        if isinstance(pad_id, int):
-            return int(pad_id)
-    return 0
+    if not callable(token_to_id):
+        raise ValueError("el tokenizer no expone token_to_id; no se puede resolver el pad token")
+
+    pad_id = token_to_id(_PAD_TOKEN)
+    if not isinstance(pad_id, int):
+        raise ValueError(f"el tokenizer no contiene el pad token '{_PAD_TOKEN}'")
+    return int(pad_id)
 
 
 def _resolve_model_path(model_dir: Path) -> Path:
@@ -100,6 +111,15 @@ def _create_session(model_path: Path, threads: int) -> ort.InferenceSession:
         sess_options=options,
         providers=["CPUExecutionProvider"],
     )
+
+
+def _input_names(session: _Session) -> set[str]:
+    """Devuelve los nombres de entrada declarados por la sesión ONNX."""
+
+    get_inputs = getattr(session, "get_inputs", None)
+    if callable(get_inputs):
+        return {str(item.name) for item in get_inputs()}
+    return {"input_ids", "attention_mask"}
 
 
 class OnnxCrossEncoderReranker:
@@ -127,6 +147,10 @@ class OnnxCrossEncoderReranker:
         if tokenizer is None:
             assert model_path is not None
             tokenizer = cast(_Tokenizer, Tokenizer.from_file(str(model_path / _TOKENIZER_FILENAME)))
+        elif isinstance(tokenizer, Tokenizer):
+            # Evita mutar un tokenizer inyectado trabajando sobre un clon.
+            tokenizer = cast(_Tokenizer, Tokenizer.from_str(tokenizer.to_str()))
+
         if session is None:
             assert model_path is not None
             session = cast(_Session, _create_session(_resolve_model_path(model_path), threads))
@@ -134,6 +158,7 @@ class OnnxCrossEncoderReranker:
         self._session = session
         self._tokenizer = tokenizer
         self._batch_size = _DEFAULT_BATCH_SIZE
+        self._input_names = _input_names(session)
 
         pad_id = _resolve_pad_id(tokenizer)
         tokenizer.enable_truncation(max_length=max_length)
@@ -162,10 +187,16 @@ class OnnxCrossEncoderReranker:
             [_attention_mask(encoding) for encoding in encodings], dtype=np.int64
         )
 
-        outputs = self._session.run(
-            None,
-            {"input_ids": input_ids, "attention_mask": attention_mask},
-        )
+        input_feed: dict[str, np.ndarray] = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        if "token_type_ids" in self._input_names:
+            input_feed["token_type_ids"] = np.asarray(
+                [_token_type_ids(encoding) for encoding in encodings], dtype=np.int64
+            )
+
+        outputs = self._session.run(None, input_feed)
         logits = np.asarray(outputs[0], dtype=np.float32)
 
         if logits.ndim == 2 and logits.shape[1] == 1:
@@ -181,3 +212,12 @@ def _attention_mask(encoding: _Encoding) -> list[int]:
     if mask is None:
         return [1] * len(encoding.ids)
     return list(mask)
+
+
+def _token_type_ids(encoding: _Encoding) -> list[int]:
+    """Devuelve los segment ids del tokenizer; los dobles sin ellos usan ceros."""
+
+    type_ids = getattr(encoding, "type_ids", None)
+    if type_ids is None:
+        return [0] * len(encoding.ids)
+    return list(type_ids)

@@ -11,10 +11,16 @@ def test_sigmoid_is_stable_for_large_values():
     assert values.tolist() == [0.0, 0.5, 1.0]
 
 
+class FakeInput:
+    def __init__(self, name):
+        self.name = name
+
+
 class FakeEncoding:
-    def __init__(self, ids, attention_mask=None):
+    def __init__(self, ids, attention_mask=None, type_ids=None):
         self.ids = ids
         self.attention_mask = attention_mask or [1] * len(ids)
+        self.type_ids = type_ids
 
 
 class FakeTokenizer:
@@ -31,11 +37,18 @@ class FakeTokenizer:
         self.calls.append(list(pairs))
         return [FakeEncoding([1, 2, 3]) for _ in pairs]
 
+    def token_to_id(self, token):
+        return 1
+
 
 class FakeSession:
-    def __init__(self, logits):
+    def __init__(self, logits, input_names=("input_ids", "attention_mask")):
         self.logits = np.array(logits, dtype=np.float32)
         self.inputs = None
+        self._input_names = input_names
+
+    def get_inputs(self):
+        return [FakeInput(name) for name in self._input_names]
 
     def run(self, output_names, inputs):
         self.inputs = inputs
@@ -70,9 +83,45 @@ def test_reranker_sends_input_ids_and_attention_mask():
     assert session.inputs["attention_mask"].tolist() == [[1, 1, 1]]
 
 
+def test_reranker_sends_token_type_ids_when_model_declares_them():
+    class TypeIdTokenizer(FakeTokenizer):
+        def encode_batch(self, pairs):
+            self.calls.append(list(pairs))
+            return [FakeEncoding([1, 2, 3], type_ids=[0, 0, 1]) for _ in pairs]
+
+    session = FakeSession([0.0], input_names=("input_ids", "attention_mask", "token_type_ids"))
+    reranker = OnnxCrossEncoderReranker(session=session, tokenizer=TypeIdTokenizer())
+
+    reranker.score("q", ["p"])
+
+    assert "token_type_ids" in session.inputs
+    assert session.inputs["token_type_ids"].dtype == np.int64
+    assert session.inputs["token_type_ids"].tolist() == [[0, 0, 1]]
+
+
+def test_reranker_sends_zero_token_type_ids_when_tokenizer_omits_them():
+    session = FakeSession([0.0], input_names=("input_ids", "attention_mask", "token_type_ids"))
+    reranker = OnnxCrossEncoderReranker(session=session, tokenizer=FakeTokenizer())
+
+    reranker.score("q", ["p"])
+
+    assert session.inputs["token_type_ids"].tolist() == [[0, 0, 0]]
+
+
+def test_reranker_omits_token_type_ids_when_model_does_not_declare_them():
+    session = FakeSession([0.0], input_names=("input_ids", "attention_mask"))
+    reranker = OnnxCrossEncoderReranker(session=session, tokenizer=FakeTokenizer())
+
+    reranker.score("q", ["p"])
+
+    assert "token_type_ids" not in session.inputs
+
+
 def test_reranker_handles_column_vector_logits():
     session = SimpleNamespace(
         inputs=None,
+        _input_names=("input_ids", "attention_mask"),
+        get_inputs=lambda: [FakeInput(name) for name in session._input_names],
         run=lambda _names, inputs: (
             setattr(session, "inputs", inputs) or [np.array([[1.0], [-1.0]], dtype=np.float32)]
         ),
@@ -162,3 +211,12 @@ def test_reranker_falls_back_to_model_onnx_when_int8_missing(tmp_path, monkeypat
     OnnxCrossEncoderReranker(tmp_path)
 
     assert seen["model_path"] == str(tmp_path / "model.onnx")
+
+
+def test_reranker_raises_when_tokenizer_cannot_resolve_pad_token():
+    class PadlessTokenizer(FakeTokenizer):
+        def token_to_id(self, token):
+            return None
+
+    with pytest.raises(ValueError, match="pad token"):
+        OnnxCrossEncoderReranker(session=FakeSession([0.0]), tokenizer=PadlessTokenizer())
