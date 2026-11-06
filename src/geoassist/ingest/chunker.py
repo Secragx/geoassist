@@ -230,7 +230,6 @@ class Chunker:
             if (
                 same_heading
                 and current_tokens < self._min_tokens
-                and block.token_count < self._min_tokens
                 and current_tokens + block.token_count <= self._max_tokens
             ):
                 current.append(block)
@@ -411,13 +410,15 @@ class Chunker:
                 current = []
 
         for line in body:
+            if self._counter.count(render([line])) > self._max_tokens:
+                flush()
+                for piece in self._split_row(line, body_limit):
+                    parts.append(render([piece]))
+                continue
             candidate = render([*current, line])
             if current and self._counter.count(candidate) > self._max_tokens:
                 flush()
                 current = [line]
-            elif not current and self._counter.count(candidate) > self._max_tokens:
-                for piece in self._split_row(line, body_limit):
-                    parts.append(render([piece]))
             else:
                 current.append(line)
         flush()

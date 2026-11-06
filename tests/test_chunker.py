@@ -65,3 +65,27 @@ def test_image_alt_is_kept_and_flagged():
     chunk = Chunker(WordCounter()).chunk(md, title="T")[0]
     assert "Pantallazo del error" in chunk.text
     assert chunk.has_images is True
+
+
+def test_oversized_code_line_is_split_and_keeps_fences():
+    long_line = " ".join(f"w{i}" for i in range(100))
+    body = f"SELECT 1;\n{long_line}\nSELECT 2;"
+    code = f"```sql\n{body}\n```"
+    chunks = Chunker(WordCounter(), max_tokens=30, target_tokens=20).chunk(
+        f"# T\n\n{code}\n", title="T"
+    )
+    assert len(chunks) > 1
+    assert all(chunk.token_count <= 30 for chunk in chunks)
+    assert all(chunk.text.startswith("```sql") for chunk in chunks)
+    assert all(chunk.text.endswith("```") for chunk in chunks)
+
+
+def test_short_paragraph_merges_into_following_long_paragraph():
+    long_paragraph = " ".join(f"w{i}" for i in range(200))
+    md = f"# T\n\nshort\n\n{long_paragraph}\n"
+    chunks = Chunker(WordCounter(), min_tokens=80, max_tokens=600).chunk(md, title="T")
+    assert chunks[0].token_count <= 600
+    assert all(
+        chunk.token_count >= 80 or index == len(chunks) - 1 for index, chunk in enumerate(chunks)
+    )
+    assert chunks[0].text.startswith("short")
