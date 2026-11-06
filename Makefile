@@ -53,4 +53,5 @@ sync-status:
 
 ## Activa una versión publicada (rollback). Uso: make activate VERSION=<id>.
 activate:
+	@test "$(origin VERSION)" = "command line" || (echo "ERROR: VERSION is required (use make activate VERSION=<id>)" >&2 && exit 1)
 	$(COMPOSE) --profile tools run --rm sync python -m geoassist.sync activate $(VERSION)
