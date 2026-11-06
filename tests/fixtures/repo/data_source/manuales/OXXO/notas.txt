@@ -1,0 +1,1 @@
+Notas auxiliares que no deben indexarse.
