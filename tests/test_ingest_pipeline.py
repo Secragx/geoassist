@@ -13,6 +13,7 @@ from tests.factories import HashEmbedder
 
 ROOT = Path(__file__).parent / "fixtures" / "repo"
 RULES = CorpusRules.load(Path(__file__).parent / "fixtures" / "corpus_rules.yml")
+MIGRATIONS_DIR = Path(__file__).parent.parent / "migrations" / "corpus"
 
 
 class WordCounter:
@@ -27,6 +28,7 @@ def make_ingestor(embedder=None):
         resolver=MetadataResolver(RULES),
         embedder=embedder or HashEmbedder(),
         counter=WordCounter(),
+        migrations_dir=MIGRATIONS_DIR,
     )
 
 

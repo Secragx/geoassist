@@ -60,6 +60,44 @@ class ManualLoader:
         self._asset_names: set[str] | None = None
         self._asset_stems: set[str] | None = None
 
+    @property
+    def repo_root(self) -> Path:
+        """Raíz del repositorio de manuales."""
+
+        return self._repo_root
+
+    def discover_ignored(self) -> list[tuple[str, str]]:
+        """Devuelve los ``.md`` ignorados por las reglas, con su motivo."""
+
+        manuals_root = self._manuals_root
+        if not manuals_root.is_dir():
+            return []
+
+        repo_root = self._repo_root
+        real_repo_root = repo_root.resolve()
+        real_manuals_root = manuals_root.resolve()
+        if not real_manuals_root.is_relative_to(real_repo_root):
+            return []
+
+        ignored: list[tuple[str, str]] = []
+        for path in manuals_root.rglob("*.md"):
+            absolute_path = _absolute(path)
+            try:
+                real_path = absolute_path.resolve()
+            except OSError:
+                continue
+            if not real_path.is_relative_to(real_repo_root):
+                continue
+            if not real_path.is_file():
+                continue
+
+            rel_path = absolute_path.relative_to(repo_root).as_posix()
+            if self._rules.is_ignored(rel_path):
+                ignored.append((rel_path, "matched ignore rule"))
+
+        ignored.sort(key=lambda item: item[0])
+        return ignored
+
     def discover(self) -> list[RawDocument]:
         """Devuelve los documentos permitidos, ordenados por ``rel_path``."""
 

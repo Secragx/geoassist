@@ -142,3 +142,9 @@ def test_existing_asset_is_resolved_by_base_name(tmp_path):
 
     assert len(docs) == 1
     assert docs[0].warnings == ()
+
+
+def test_discover_ignored_includes_ignored_template():
+    ignored = ManualLoader(ROOT, "data_source/manuales", RULES).discover_ignored()
+    paths = [rel_path for rel_path, _ in ignored]
+    assert any("model_manuales.md" in path for path in paths)

@@ -52,13 +52,15 @@ def write_corpus(
     db_path: Path,
     documents: Sequence[DocumentRow],
     chunks: Sequence[ChunkRow],
+    migrations_dir: Path | None = None,
 ) -> None:
     """Crea ``db_path``, aplica migraciones, inserta filas y puebla ``chunks_fts``."""
 
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    apply_migrations(db_path, _MIGRATIONS_DIR)
+    migrations_path = Path(migrations_dir) if migrations_dir is not None else _MIGRATIONS_DIR
+    apply_migrations(db_path, migrations_path)
 
     conn = sqlite3.connect(db_path)
     try:
@@ -88,13 +90,13 @@ def write_corpus(
             ],
         )
 
-        for chunk in chunks:
-            conn.execute(
-                """
-                INSERT INTO chunks (
-                    chunk_id, doc_id, ordinal, heading, text, token_count, has_images
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
+        conn.executemany(
+            """
+            INSERT INTO chunks (
+                chunk_id, doc_id, ordinal, heading, text, token_count, has_images
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
                 (
                     chunk.chunk_id,
                     chunk.doc_id,
@@ -103,8 +105,10 @@ def write_corpus(
                     chunk.text,
                     chunk.token_count,
                     int(chunk.has_images),
-                ),
-            )
+                )
+                for chunk in chunks
+            ],
+        )
 
         conn.execute(
             "INSERT INTO chunks_fts(rowid, heading, text) SELECT id, heading, text FROM chunks"

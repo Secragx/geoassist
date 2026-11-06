@@ -58,12 +58,18 @@ class Ingestor:
         resolver: MetadataResolver,
         embedder: Embedder,
         counter: TokenCounter,
+        migrations_dir: Path | None = None,
     ) -> None:
         self._loader = loader
         self._chunker = chunker
         self._resolver = resolver
         self._embedder = embedder
         self._counter = counter
+        self._migrations_dir = (
+            Path(migrations_dir)
+            if migrations_dir is not None
+            else Path(loader.repo_root) / "migrations" / "corpus"
+        )
 
     def build(self, version_id: str, output_dir: Path) -> IngestReport:
         """Construye el corpus en un directorio temporal y lo publica atómicamente."""
@@ -150,7 +156,7 @@ class Ingestor:
         if orphan_chunks:
             raise IngestValidationError(f"chunks huérfanos: {orphan_chunks[:5]}")
 
-        write_corpus(db_path, documents, chunks)
+        write_corpus(db_path, documents, chunks, migrations_dir=self._migrations_dir)
 
         chunk_row_ids, chunk_texts = self._read_chunk_texts(db_path)
         if len(chunk_row_ids) != len(chunks):
@@ -234,41 +240,10 @@ class Ingestor:
     def _discover_skipped(self) -> list[SkippedRecord]:
         """Devuelve los archivos Markdown ignorados por las reglas del corpus."""
 
-        try:
-            repo_root = self._loader._repo_root  # type: ignore[attr-defined]
-            manuals_root = self._loader._manuals_root  # type: ignore[attr-defined]
-            rules = self._loader._rules  # type: ignore[attr-defined]
-        except AttributeError:
-            return []
-
-        if not manuals_root.is_dir():
-            return []
-
-        real_repo_root = repo_root.resolve()
-        skipped: list[SkippedRecord] = []
-
-        for path in manuals_root.rglob("*.md"):
-            absolute_path = Path(os.path.abspath(path))
-            try:
-                real_path = absolute_path.resolve()
-            except OSError:
-                continue
-            if not real_path.is_relative_to(real_repo_root):
-                continue
-            if not real_path.is_file():
-                continue
-
-            rel_path = absolute_path.relative_to(repo_root).as_posix()
-            if rules.is_ignored(rel_path):
-                skipped.append(
-                    SkippedRecord(
-                        rel_path=rel_path,
-                        reason="ignorado por reglas de corpus",
-                    )
-                )
-
-        skipped.sort(key=lambda item: item.rel_path)
-        return skipped
+        return [
+            SkippedRecord(rel_path=rel_path, reason=reason)
+            for rel_path, reason in self._loader.discover_ignored()
+        ]
 
 
 def _stable_id(rel_path: str) -> str:
