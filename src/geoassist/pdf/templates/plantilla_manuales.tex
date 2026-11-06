@@ -1,0 +1,144 @@
+\documentclass[12pt]{article}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% --- PAQUETES DE COLOR Y TABLAS ---
+\usepackage[table,xcdraw]{xcolor}
+
+% --- PAQUETES DE FORMATO ---
+\usepackage{graphicx}
+
+% --- CONTROL DE IMAGENES (ESTRICTO) ---
+\usepackage{float}
+\restylefloat{figure}
+\floatplacement{figure}{H}
+
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+
+% --- PAQUETES REQUERIDOS POR PANDOC ---
+\usepackage{calc}
+\usepackage{amsmath,amssymb}
+\usepackage{longtable, booktabs, array}
+\usepackage{multirow}
+
+% --- GESTION PROFESIONAL DE CODIGO ---
+\usepackage{listings}
+
+% --- DEFINICION DEL COMANDO \passthrough ---
+\newcommand{\passthrough}[1]{#1}
+
+% Definimos colores para el código
+\definecolor{codegray}{rgb}{0.95,0.95,0.95}
+\definecolor{codeborder}{rgb}{0.8,0.8,0.8}
+
+\lstset{
+    basicstyle=\ttfamily\footnotesize, % CAMBIO: Fuente un poco mas pequeña (footnotesize) para que quepa mas
+    breaklines=true,                 % Activa el salto de linea
+    breakatwhitespace=false,         % CAMBIO CRITICO: Permite cortar aunque no haya espacios (vital para SQL largos)
+    postbreak=\mbox{\textcolor{red}{\ensuremath{\hookrightarrow}}\space},
+    backgroundcolor=\color{codegray},
+    frame=single,
+    rulecolor=\color{codeborder},
+    columns=fullflexible,            % Ajuste flexible de columnas
+    keepspaces=true,
+    showstringspaces=false,
+    extendedchars=true,
+    literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1
+}
+
+% --- MEJORA VISUAL DE TABLAS ---
+\renewcommand{\arraystretch}{1.4}
+\let\oldlongtable\longtable
+\let\endoldlongtable\endlongtable
+\renewenvironment{longtable}{%
+  \rowcolors{2}{gray!10}{white}%
+  \oldlongtable}
+  {\endoldlongtable}
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% --- MANEJO DE IMÁGENES ---
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+
+% --- ALERTAS Y CAJAS ---
+\usepackage{mdframed}
+
+\mdfdefinestyle{portadaStyle}{
+  linecolor=black,
+  linewidth=2pt,
+  innerleftmargin=20pt,
+  innerrightmargin=20pt,
+  innertopmargin=30pt,
+  innerbottommargin=30pt,
+  frametitlebackgroundcolor=gray!20,
+  frametitlerule=true
+}
+
+% --- HEADER Y FOOTER ---
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headheight}{40pt}
+
+$if(headerlogo)$
+  \fancyhead[L]{\includegraphics[height=1cm]{$headerlogo$}}
+$endif$
+
+\fancyhead[C]{\textbf{$title$}}
+\fancyhead[R]{\textbf{v$version$}}
+
+\fancyfoot[C]{
+    \footnotesize \textbf{{SI ESTE DOCUMENTO SE ENCUENTRA IMPRESO,} \\
+SE TRATA DE UNA COPIA NO AUTORIZADA}
+}
+\fancyfoot[R]{\thepage\ / \pageref{LastPage}}
+
+\begin{document}
+
+% --- PORTADA ---
+\begin{titlepage}
+    \newgeometry{left=2.5cm, right=2.5cm, top=3cm, bottom=3cm}
+    \centering
+
+    $if(headerlogo)$
+    \includegraphics[width=0.5\textwidth]{$headerlogo$}\par
+    $endif$
+
+    \vspace{3cm}
+
+    \begin{mdframed}[style=portadaStyle]
+        \centering
+        {\Huge \textbf{\MakeUppercase{$title$}} \par}
+        \vspace{0.5cm}
+    \end{mdframed}
+
+    \vspace{2cm}
+
+    {\Large \textbf{Versión:} $version$ \par}
+    \vspace{0.5cm}
+    {\large \textbf{Fecha de Emisión:} $date$ \par}
+
+    \vfill
+
+    \textbf{Departamento de Tecnología y Soporte}
+    \vspace{2cm}
+\end{titlepage}
+\restoregeometry
+
+\newpage
+\tableofcontents
+\newpage
+
+% --- CUERPO DEL DOCUMENTO ---
+$body$
+
+\end{document}

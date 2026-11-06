@@ -141,7 +141,36 @@ class SyncOrchestrator:
         if no_pdf or self._renderer is None:
             return []
         try:
-            return list(self._renderer.render(self._repo_dir, self._corpus_dir))
+            if hasattr(self._renderer, "render_all"):
+                try:
+                    results = self._renderer.render_all()
+                except TypeError:
+                    results = self._renderer.render_all(self._repo_dir, self._corpus_dir)
+            elif hasattr(self._renderer, "render"):
+                try:
+                    results = self._renderer.render()
+                except TypeError:
+                    results = self._renderer.render(self._repo_dir, self._corpus_dir)
+            else:
+                results = []
+            out: list[dict[str, Any]] = []
+            for r in results:
+                if isinstance(r, dict):
+                    out.append(r)
+                else:
+                    status = getattr(r, "status", None)
+                    ok = status in {"generated", "skipped"}
+                    out.append(
+                        {
+                            "ok": ok,
+                            "rel_path": getattr(r, "rel_path", getattr(r, "path", None)),
+                            "status": status,
+                            "reason": getattr(r, "reason", getattr(r, "error", None)),
+                        }
+                    )
+            if not out:
+                return []
+            return out
         except Exception as exc:  # noqa: BLE001 - el PDF no debe abortar la publicación
             return [{"ok": False, "error": str(exc)}]
 

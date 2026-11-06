@@ -55,6 +55,29 @@ def _build_ingestor(repo_dir: Path) -> Any:
     )
 
 
+def _template_path() -> Path:
+    image_path = Path("/app/src/geoassist/pdf/templates/plantilla_manuales.tex")
+    if image_path.is_file():
+        return image_path
+    src_relative = (
+        Path(__file__).resolve().parents[2] / "pdf" / "templates" / "plantilla_manuales.tex"
+    )
+    if src_relative.is_file():
+        return src_relative
+    # fallback to repo copy
+    alt = (
+        Path(__file__).resolve().parents[3]
+        / "src"
+        / "geoassist"
+        / "pdf"
+        / "templates"
+        / "plantilla_manuales.tex"
+    )
+    if alt.is_file():
+        return alt
+    raise FileNotFoundError("No se encontró plantilla_manuales.tex")
+
+
 def _sync(args: argparse.Namespace) -> int:
     from geoassist.sync.orchestrator import SyncOrchestrator
 
@@ -63,11 +86,28 @@ def _sync(args: argparse.Namespace) -> int:
     corpus_dir = settings.data_dir / "corpus"
     ingestor = _build_ingestor(repo_dir)
 
+    renderer = None
+    if not args.no_pdf:
+        try:
+            from geoassist.pdf.renderer import PdfRenderer
+
+            renderer = PdfRenderer(
+                repo_dir,
+                settings.manuals_root_rel,
+                settings.assets_root_rel,
+                _template_path(),
+                settings.data_dir / "pdfs",
+                settings.data_dir / "pdfs" / "manifest.json",
+            )
+        except Exception:
+            renderer = None
+
     orchestrator = SyncOrchestrator(
         repo_dir=repo_dir,
         repo_url=settings.sync_repo_url,
         corpus_dir=corpus_dir,
         ingestor=ingestor,
+        renderer=renderer,
         clock=time.monotonic,
     )
     report = orchestrator.run(no_pdf=args.no_pdf)
