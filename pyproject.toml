@@ -28,7 +28,14 @@ dependencies = [
 
 [project.optional-dependencies]
 # Herramientas de mantenimiento (exportación y empaquetado de modelos).
-tools = []
+tools = [
+    "huggingface-hub>=0.26,<2",
+    "onnx>=1.17,<2",
+    "onnxruntime>=1.20,<2",
+    "torch>=2.5,<3",
+    "transformers>=4.46,<6",
+    "zstandard>=0.23,<1",
+]
 # Dependencias de la imagen `sync` (generación de PDF).
 sync = [
     "pypandoc>=1.14,<2",
@@ -40,6 +47,7 @@ test = [
     "mypy>=1.13,<2",
     "pytest>=8.3,<9",
     "ruff>=0.7,<1",
+    "zstandard>=0.23,<1",
 ]
 
 [tool.uv]
@@ -63,7 +71,7 @@ select = ["B", "E", "F", "I", "SIM", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 # Las pruebas siguen literalmente los fragmentos del plan de implementación.
-"tests/**" = ["E501", "I001"]
+"tests/**" = ["E501", "E702", "F401", "I001", "SIM117"]
 
 [tool.mypy]
 python_version = "3.12"
