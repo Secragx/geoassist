@@ -419,7 +419,7 @@ defaults:
 
 `match` es una prueba de subcadena sobre `rel_path`, sin distinguir mayúsculas ni acentos. Las reglas se evalúan en orden y la primera coincidencia gana, de modo que `VERSIONES APROBADAS - OK` coincide con la regla `VERSIONES APROBADAS` y `GEOPOS - OK` con `GEOPOS`. Un `status` desconocido se indexa con `status=unknown`, se reporta y queda fuera de la recuperación por defecto. Un `app` desconocido se indexa, se reporta y solo se recupera cuando no hay filtro de aplicación.
 
-**Título:** se usa el `title` del frontmatter si no es un placeholder conocido (`Nombre del Manual`, vacío o `TODO`). Si lo es, se usa el primer `H1` que no sea de la sección de aprobación. Si no hay, se deriva del nombre de archivo, sin extensión y con `_` reemplazados por espacios.
+**Título:** se usa el `title` del frontmatter si no es un placeholder conocido (`Nombre del Manual`, vacío o `TODO`). Si lo es, se usa el primer `H1` que no sea de la sección de aprobación ni un encabezado genérico (`Objeto`, `Alcance`, `Definiciones`, `Propiedades`, `Componentes`). Si no hay, se deriva del nombre de archivo, sin extensión y con `_` reemplazados por espacios.
 
 **Estado:** `approved`, `pending`, `archived` o `unknown`. La recuperación por defecto incluye `approved` y `pending`; `archived` y `unknown` quedan excluidos. Los PDF se generan para todos, incluidos `archived`.
 
