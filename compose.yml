@@ -95,9 +95,13 @@ services:
     image: ngrok/ngrok:3.39.13-alpine@sha256:a51a7637a70be573615b01852af0419c4ab9dc857601b3d61ea2a082be3ec0d3
     profiles: ["dev"]
     restart: unless-stopped
-    command: ["http", "api:8000", "--log=stdout"]
+    command:
+      - "sh"
+      - "-c"
+      - 'if [ -n "$$NGROK_DOMAIN" ]; then ngrok http api:8000 --domain=$$NGROK_DOMAIN --log=stdout; else ngrok http api:8000 --log=stdout; fi'
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+      NGROK_DOMAIN: ${NGROK_DOMAIN:-}
     depends_on:
       api:
         condition: service_healthy
