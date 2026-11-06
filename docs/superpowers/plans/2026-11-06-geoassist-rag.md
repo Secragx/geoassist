@@ -179,22 +179,29 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def table_names(db_path):
     import sqlite3
+
     with sqlite3.connect(db_path) as conn:
-        rows = conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view')").fetchall()
+        rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type IN ('table','view')"
+        ).fetchall()
     return {row[0] for row in rows}
 
 
 def test_corpus_migrations_create_schema(tmp_path):
     db = tmp_path / "corpus.db"
     apply_migrations(db, ROOT / "migrations" / "corpus")
-    assert {"documents", "chunks", "chunks_fts", "corpus_meta", "schema_migrations"} <= table_names(db)
+    assert {"documents", "chunks", "chunks_fts", "corpus_meta", "schema_migrations"} <= table_names(
+        db
+    )
 
 
 def test_migrations_are_idempotent(tmp_path):
     db = tmp_path / "state.db"
     apply_migrations(db, ROOT / "migrations" / "state")
     apply_migrations(db, ROOT / "migrations" / "state")
-    assert {"sessions", "messages", "activities", "feedback", "schema_migrations"} <= table_names(db)
+    assert {"sessions", "messages", "activities", "feedback", "schema_migrations"} <= table_names(
+        db
+    )
 ```
 
 ```python
@@ -280,7 +287,8 @@ def test_sha256_file(tmp_path):
 def test_build_bundle_contains_models_and_checksum(tmp_path):
     bge = tmp_path / "bge-m3-int8"
     rerank = tmp_path / "reranker-int8"
-    bge.mkdir(); rerank.mkdir()
+    bge.mkdir()
+    rerank.mkdir()
     (bge / "model.onnx").write_bytes(b"bge")
     (rerank / "model.onnx").write_bytes(b"rerank")
     out = tmp_path / "dist"
@@ -457,7 +465,12 @@ def test_frontmatter_wins_over_path():
         {"app": "geopricer", "status": "pending", "title": "Manual real", "version": "2.0"},
         first_h1="Objeto",
     )
-    assert (meta.app, meta.status, meta.title, meta.version) == ("geopricer", "pending", "Manual real", "2.0")
+    assert (meta.app, meta.status, meta.title, meta.version) == (
+        "geopricer",
+        "pending",
+        "Manual real",
+        "2.0",
+    )
 
 
 def test_placeholder_title_falls_back_to_filename():
@@ -754,8 +767,11 @@ class FakeEncoding:
 
 
 class FakeTokenizer:
-    def enable_truncation(self, **kwargs): pass
-    def enable_padding(self, **kwargs): pass
+    def enable_truncation(self, **kwargs):
+        pass
+
+    def enable_padding(self, **kwargs):
+        pass
 
     def encode_batch(self, texts):
         return [FakeEncoding([1, 2, 3]) for _ in texts]
@@ -1221,7 +1237,9 @@ from geoassist.sync.git import update_repo
 
 def git(*args, cwd):
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
-    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def test_clones_and_updates_to_remote_main(tmp_path):
@@ -1293,6 +1311,7 @@ class FakeIngestor:
             chunk_count = 9
             warnings = ()
             skipped = ()
+
         return Report()
 
 
@@ -1302,7 +1321,9 @@ def test_success_writes_report_and_publishes(tmp_path, monkeypatch):
     report = orch.run(no_pdf=True)
     assert report.exit_code == 0
     assert (tmp_path / "corpus" / "current.json").exists()
-    assert json.loads((tmp_path / "corpus" / "sync_report.json").read_text())["git_commit"] == "abc123"
+    assert (
+        json.loads((tmp_path / "corpus" / "sync_report.json").read_text())["git_commit"] == "abc123"
+    )
 ```
 
 - [ ] **Step 2: Ejecutar y verificar que fallan**
@@ -1358,8 +1379,28 @@ NOW = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)
 
 def test_session_is_isolated_by_user(tmp_path):
     store = StateStore(tmp_path / "state.db")
-    store.append_turn("k1", tenant_id="t", conversation_id="c", user_id="u1", question="q1", answer="a1", sources=[], app_hint=None, now=NOW)
-    store.append_turn("k2", tenant_id="t", conversation_id="c", user_id="u2", question="q2", answer="a2", sources=[], app_hint=None, now=NOW)
+    store.append_turn(
+        "k1",
+        tenant_id="t",
+        conversation_id="c",
+        user_id="u1",
+        question="q1",
+        answer="a1",
+        sources=[],
+        app_hint=None,
+        now=NOW,
+    )
+    store.append_turn(
+        "k2",
+        tenant_id="t",
+        conversation_id="c",
+        user_id="u2",
+        question="q2",
+        answer="a2",
+        sources=[],
+        app_hint=None,
+        now=NOW,
+    )
     assert [m.content for m in store.get_session("k1", NOW).history] == ["q1", "a1"]
     assert [m.content for m in store.get_session("k2", NOW).history] == ["q2", "a2"]
 
@@ -1367,7 +1408,17 @@ def test_session_is_isolated_by_user(tmp_path):
 def test_history_keeps_last_six_turns(tmp_path):
     store = StateStore(tmp_path / "state.db")
     for i in range(8):
-        store.append_turn("k", tenant_id=None, conversation_id="c", user_id="u", question=f"q{i}", answer=f"a{i}", sources=[], app_hint=None, now=NOW + timedelta(minutes=i))
+        store.append_turn(
+            "k",
+            tenant_id=None,
+            conversation_id="c",
+            user_id="u",
+            question=f"q{i}",
+            answer=f"a{i}",
+            sources=[],
+            app_hint=None,
+            now=NOW + timedelta(minutes=i),
+        )
     history = store.get_session("k", NOW + timedelta(minutes=8)).history
     assert len(history) == 12
     assert history[0].content == "q2"
@@ -1375,14 +1426,27 @@ def test_history_keeps_last_six_turns(tmp_path):
 
 def test_session_expires(tmp_path):
     store = StateStore(tmp_path / "state.db")
-    store.append_turn("k", tenant_id=None, conversation_id="c", user_id="u", question="q", answer="a", sources=[], app_hint=None, now=NOW)
+    store.append_turn(
+        "k",
+        tenant_id=None,
+        conversation_id="c",
+        user_id="u",
+        question="q",
+        answer="a",
+        sources=[],
+        app_hint=None,
+        now=NOW,
+    )
     assert store.get_session("k", NOW + timedelta(minutes=121)).history == ()
 
 
 def test_activity_cache_expires(tmp_path):
     store = StateStore(tmp_path / "state.db")
     store.cache_response("act1", {"type": "message", "text": "hola"}, NOW)
-    assert store.get_cached_response("act1", NOW + timedelta(hours=1)) == {"type": "message", "text": "hola"}
+    assert store.get_cached_response("act1", NOW + timedelta(hours=1)) == {
+        "type": "message",
+        "text": "hola",
+    }
     assert store.get_cached_response("act1", NOW + timedelta(hours=25)) is None
 
 
@@ -1570,6 +1634,7 @@ from geoassist.storage.corpus_read import ChunkView, LexicalHit
 
 class FakeEmbedder:
     dimension = 4
+
     def embed_query(self, text):
         return [1.0, 0.0, 0.0, 0.0]
 
@@ -1585,10 +1650,27 @@ class FakeReader:
 
     def get_chunks(self, ids):
         rows = {
-            1: ChunkView(1, "d1:0", "d1", "H", "texto uno", "Doc uno", "1.0", "approved", "geopos", "a.md"),
-            2: ChunkView(2, "d2:0", "d2", "H", "texto dos", "Doc dos", "1.0", "pending", "geopos", "b.md"),
-            3: ChunkView(3, "d3:0", "d3", "H", "texto tres", "Doc tres", "1.0", "archived", "geopos", "c.md"),
-            4: ChunkView(4, "d4:0", "d4", "H", "texto cuatro", "Doc cuatro", "1.0", "approved", "geopricer", "d.md"),
+            1: ChunkView(
+                1, "d1:0", "d1", "H", "texto uno", "Doc uno", "1.0", "approved", "geopos", "a.md"
+            ),
+            2: ChunkView(
+                2, "d2:0", "d2", "H", "texto dos", "Doc dos", "1.0", "pending", "geopos", "b.md"
+            ),
+            3: ChunkView(
+                3, "d3:0", "d3", "H", "texto tres", "Doc tres", "1.0", "archived", "geopos", "c.md"
+            ),
+            4: ChunkView(
+                4,
+                "d4:0",
+                "d4",
+                "H",
+                "texto cuatro",
+                "Doc cuatro",
+                "1.0",
+                "approved",
+                "geopricer",
+                "d.md",
+            ),
         }
         return [rows[i] for i in ids]
 
@@ -1639,7 +1721,12 @@ def test_low_score_abstains():
 def test_max_three_chunks_per_document():
     class SameDocReader(FakeReader):
         def get_chunks(self, ids):
-            return [ChunkView(i, f"d1:{i}", "d1", "H", "texto", "Doc", "1.0", "approved", "geopos", "a.md") for i in ids]
+            return [
+                ChunkView(
+                    i, f"d1:{i}", "d1", "H", "texto", "Doc", "1.0", "approved", "geopos", "a.md"
+                )
+                for i in ids
+            ]
 
     class FiveStore(FakeStore):
         def search(self, vector, limit):
@@ -1649,7 +1736,9 @@ def test_max_three_chunks_per_document():
         def lexical_search(self, query, limit, apps=None, statuses=None):
             return []
 
-    retriever = Retriever(NoLexical(), FiveStore(), FakeEmbedder(), None, max_per_doc=3, final_limit=5)
+    retriever = Retriever(
+        NoLexical(), FiveStore(), FakeEmbedder(), None, max_per_doc=3, final_limit=5
+    )
     result = retriever.retrieve("consulta")
     assert len(result.chunks) == 3
     assert all(chunk.doc_id == "d1" for chunk in result.chunks)
@@ -1698,7 +1787,22 @@ from geoassist.models import ChatMessage
 from geoassist.rag.prompt import build_fallback, build_messages, format_sources
 from geoassist.rag.retriever import RetrievedChunk
 
-CHUNK = RetrievedChunk(1, "d:0", "d", "Sección", "Texto útil", "Manual", "1.0", "pending", "geopos", "a.md", 0.9, 1, 1, 0.8)
+CHUNK = RetrievedChunk(
+    1,
+    "d:0",
+    "d",
+    "Sección",
+    "Texto útil",
+    "Manual",
+    "1.0",
+    "pending",
+    "geopos",
+    "a.md",
+    0.9,
+    1,
+    1,
+    0.8,
+)
 
 
 def test_context_is_numbered_and_marks_pending():
@@ -1711,7 +1815,9 @@ def test_context_is_numbered_and_marks_pending():
 
 
 def test_history_keeps_roles_and_order():
-    messages = build_messages("ahora", [ChatMessage("user", "antes", "t"), ChatMessage("assistant", "ok", "t")], [CHUNK])
+    messages = build_messages(
+        "ahora", [ChatMessage("user", "antes", "t"), ChatMessage("assistant", "ok", "t")], [CHUNK]
+    )
     assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
 
 
@@ -1840,14 +1946,16 @@ import pytest
 from geoassist.teams.outgoing_webhook import OutgoingWebhookAdapter, TeamsAuthError, InvalidPayload
 
 SECRET = "teams-secret"
-BODY = json.dumps({
-    "type": "message",
-    "id": "act-1",
-    "text": "<at>GeoAssist</at> ¿Cómo confirmo una remesa?",
-    "from": {"id": "user-1"},
-    "conversation": {"id": "conv-1"},
-    "channelData": {"tenant": {"id": "tenant-1"}},
-}).encode()
+BODY = json.dumps(
+    {
+        "type": "message",
+        "id": "act-1",
+        "text": "<at>GeoAssist</at> ¿Cómo confirmo una remesa?",
+        "from": {"id": "user-1"},
+        "conversation": {"id": "conv-1"},
+        "channelData": {"tenant": {"id": "tenant-1"}},
+    }
+).encode()
 
 
 def signature(body=BODY, secret=SECRET):
@@ -1870,7 +1978,11 @@ def test_invalid_or_missing_signature_is_rejected():
 def test_parse_strips_mention_and_extracts_fields():
     message = OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(BODY)
     assert message.text == "¿Cómo confirmo una remesa?"
-    assert (message.activity_id, message.user_id, message.conversation_id) == ("act-1", "user-1", "conv-1")
+    assert (message.activity_id, message.user_id, message.conversation_id) == (
+        "act-1",
+        "user-1",
+        "conv-1",
+    )
     assert message.tenant_id == "tenant-1"
 
 
@@ -1940,7 +2052,9 @@ from geoassist.services.chat import ChatService
 from geoassist.storage.state import StateStore
 
 NOW = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)
-CHUNK = RetrievedChunk(1, "d:0", "d", "H", "Texto útil", "Manual", "1.0", "approved", "geopos", "a.md", 0.9, 1, 1, 0.8)
+CHUNK = RetrievedChunk(
+    1, "d:0", "d", "H", "Texto útil", "Manual", "1.0", "approved", "geopos", "a.md", 0.9, 1, 1, 0.8
+)
 MESSAGE = InboundMessage("act-1", "¿Cómo hago?", "u1", "c1", "t1", None)
 
 
@@ -1948,6 +2062,7 @@ class FakeRetriever:
     def __init__(self, result):
         self.result = result
         self.calls = 0
+
     def retrieve(self, question, app_filter=None):
         self.calls += 1
         return self.result
@@ -1959,6 +2074,7 @@ class FakeLLM:
         self.error = error
         self.calls = 0
         self.messages = None
+
     def complete(self, messages, *, timeout_s, max_tokens=500, temperature=0.1):
         self.calls += 1
         self.messages = messages
@@ -1973,7 +2089,9 @@ class FakeDetector:
 
 
 def make_service(tmp_path, result, llm):
-    return ChatService(StateStore(tmp_path / "state.db"), FakeRetriever(result), llm, FakeDetector())
+    return ChatService(
+        StateStore(tmp_path / "state.db"), FakeRetriever(result), llm, FakeDetector()
+    )
 
 
 def test_abstention_does_not_call_llm(tmp_path):
@@ -1987,6 +2105,7 @@ def test_abstention_does_not_call_llm(tmp_path):
 
 def test_llm_timeout_returns_fallback(tmp_path):
     from geoassist.llm.base import LLMError
+
     llm = FakeLLM(error=LLMError("timeout", "boom"))
     result = RetrievalResult((CHUNK,), True, None, {})
     outcome = make_service(tmp_path, result, llm).handle(MESSAGE)
@@ -2034,19 +2153,32 @@ from geoassist.api.readiness import ReadinessProbe
 from geoassist.storage.state import StateStore
 
 SECRET = "secret"
-BODY = json.dumps({"type": "message", "id": "act-1", "text": "<at>Bot</at> hola", "from": {"id": "u"}, "conversation": {"id": "c"}}).encode()
+BODY = json.dumps(
+    {
+        "type": "message",
+        "id": "act-1",
+        "text": "<at>Bot</at> hola",
+        "from": {"id": "u"},
+        "conversation": {"id": "c"},
+    }
+).encode()
 
 
 def signed(body=BODY):
     digest = hmac.new(SECRET.encode(), body, hashlib.sha256).digest()
-    return {"Authorization": "HMAC " + base64.b64encode(digest).decode(), "Content-Type": "application/json"}
+    return {
+        "Authorization": "HMAC " + base64.b64encode(digest).decode(),
+        "Content-Type": "application/json",
+    }
 
 
 class FakeService:
     def __init__(self):
         self.calls = 0
+
     def handle(self, message):
         from geoassist.services.chat import ChatOutcome
+
         self.calls += 1
         return ChatOutcome("respuesta", False, (), 10)
 
@@ -2055,8 +2187,16 @@ def app_with(service, state=None):
     from geoassist.teams.outgoing_webhook import OutgoingWebhookAdapter
     from geoassist.api.app import AppDependencies
     from geoassist.config import Settings
-    settings = Settings(_env_file=None, teams_security_token=SECRET, llm_api_key="k", llm_data_policy="external_approved")
-    deps = AppDependencies(settings, OutgoingWebhookAdapter(SECRET, "Bot"), service, None, None, state)
+
+    settings = Settings(
+        _env_file=None,
+        teams_security_token=SECRET,
+        llm_api_key="k",
+        llm_data_policy="external_approved",
+    )
+    deps = AppDependencies(
+        settings, OutgoingWebhookAdapter(SECRET, "Bot"), service, None, None, state
+    )
     return create_app(settings, probe=ReadinessProbe({}), dependencies=deps)
 
 
@@ -2076,13 +2216,17 @@ def test_duplicate_activity_uses_cache(tmp_path):
 
 
 def test_invalid_signature_returns_401():
-    response = TestClient(app_with(FakeService())).post("/teams/webhook", content=BODY, headers={"Authorization": "HMAC bad"})
+    response = TestClient(app_with(FakeService())).post(
+        "/teams/webhook", content=BODY, headers={"Authorization": "HMAC bad"}
+    )
     assert response.status_code == 401
 
 
 def test_oversized_body_returns_413():
     body = b"x" * 70000
-    response = TestClient(app_with(FakeService())).post("/teams/webhook", content=body, headers=signed(body))
+    response = TestClient(app_with(FakeService())).post(
+        "/teams/webhook", content=body, headers=signed(body)
+    )
     assert response.status_code == 413
 ```
 
@@ -2111,7 +2255,9 @@ def make_app(enabled=True):
         debug_retrieval=enabled,
         debug_token="debug-token",
     )
-    deps = AppDependencies(settings, OutgoingWebhookAdapter("secret", "Bot"), None, FakeRetriever(), None, None)
+    deps = AppDependencies(
+        settings, OutgoingWebhookAdapter("secret", "Bot"), None, FakeRetriever(), None, None
+    )
     return create_app(settings, probe=ReadinessProbe({}), dependencies=deps)
 
 
@@ -2196,7 +2342,9 @@ from geoassist.pdf.images import prepare_markdown
 
 def test_output_path_mirrors_and_replaces_extension(tmp_path):
     rel = "data_source/manuales/OXXO/GEOPOS - OK/x y (1).md"
-    assert output_path(tmp_path, rel) == tmp_path / "data_source/manuales/OXXO/GEOPOS - OK/x y (1).pdf"
+    assert (
+        output_path(tmp_path, rel) == tmp_path / "data_source/manuales/OXXO/GEOPOS - OK/x y (1).pdf"
+    )
 
 
 def test_render_key_changes_with_content_and_template(tmp_path):
@@ -2226,7 +2374,14 @@ def test_manifest_skips_unchanged_and_regenerates_changed(tmp_path, monkeypatch)
     md.write_text("# A\n\ncontenido\n")
     template = tmp_path / "template.tex"
     template.write_text("template")
-    renderer = PdfRenderer(repo, "data_source/manuales", "data_source/assets", template, tmp_path / "pdfs", tmp_path / "pdf_manifest.json")
+    renderer = PdfRenderer(
+        repo,
+        "data_source/manuales",
+        "data_source/assets",
+        template,
+        tmp_path / "pdfs",
+        tmp_path / "pdf_manifest.json",
+    )
     calls = []
 
     def fake_convert(rel_path, markdown, output, meta):
@@ -2253,7 +2408,14 @@ def test_failure_does_not_stop_the_batch(tmp_path, monkeypatch):
     (root / "b.md").write_text("# B\n")
     template = tmp_path / "template.tex"
     template.write_text("template")
-    renderer = PdfRenderer(repo, "data_source/manuales", "data_source/assets", template, tmp_path / "pdfs", tmp_path / "manifest.json")
+    renderer = PdfRenderer(
+        repo,
+        "data_source/manuales",
+        "data_source/assets",
+        template,
+        tmp_path / "pdfs",
+        tmp_path / "manifest.json",
+    )
 
     def fake_convert(rel_path, markdown, output, meta):
         if rel_path.endswith("a.md"):

@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import shutil
 import sys
 import tarfile
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -34,10 +36,19 @@ MODELS_DIR = ROOT / "models"
 
 BUNDLE_PREFIX = "models"
 COMPRESSION_LEVEL = 10
+MARKER_NAME = ".geoassist-model.json"
+INTERMEDIATE_NAMES = ("model_fp32.onnx", "model.onnx_data")
 
 EMBEDDING_MODEL = "BAAI/bge-m3"
 EMBEDDING_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 EMBEDDING_DIR = "bge-m3-int8"
+EMBEDDING_FILES = (
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "config.json",
+    "sentencepiece.bpe.model",
+    "special_tokens_map.json",
+)
 
 RERANK_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 RERANK_REVISION = "1427fd652930e4ba29e8149678df786c240d8825"
@@ -181,63 +192,131 @@ def _probe_onnx(path: Path) -> None:
 def _quantize_fp32_onnx(src: Path, dst: Path) -> None:
     from onnxruntime.quantization import QuantType, quantize_dynamic
 
+    temporary = dst.with_name(dst.name + ".tmp")
+    temporary.unlink(missing_ok=True)
     print(f"Cuantizando {src.name} -> {dst.name} (int8 dynamic)...")
-    quantize_dynamic(
-        model_input=str(src),
-        model_output=str(dst),
-        weight_type=QuantType.QInt8,
-        per_channel=True,
-        reduce_range=True,
-    )
+    try:
+        quantize_dynamic(
+            model_input=str(src),
+            model_output=str(temporary),
+            weight_type=QuantType.QInt8,
+            per_channel=True,
+            reduce_range=True,
+        )
+        if not temporary.is_file() or temporary.stat().st_size == 0:
+            raise RuntimeError(f"la cuantización no produjo {dst.name}")
+        temporary.replace(dst)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
     print(f"OK: {dst.stat().st_size / 1e6:.1f} MB")
+
+
+def _read_marker(directory: Path) -> dict[str, object] | None:
+    try:
+        data = json.loads((directory / MARKER_NAME).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_marker(directory: Path, model: str, revision: str) -> None:
+    marker = {"format": 1, "model": model, "revision": revision}
+    (directory / MARKER_NAME).write_text(
+        json.dumps(marker, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _marker_matches(
+    directory: Path, model: str, revision: str, required_files: Sequence[str]
+) -> bool:
+    marker = _read_marker(directory)
+    if marker is None:
+        return False
+    if marker.get("model") != model or marker.get("revision") != revision:
+        return False
+    return all((directory / name).is_file() for name in required_files)
+
+
+def _remove_tree(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink(missing_ok=True)
+    elif path.exists():
+        shutil.rmtree(path)
+
+
+def _remove_intermediates(directory: Path) -> None:
+    for name in INTERMEDIATE_NAMES:
+        (directory / name).unlink(missing_ok=True)
+    for path in directory.glob("*.tmp"):
+        path.unlink(missing_ok=True)
+
+
+def _new_staging(models_dir: Path, name: str) -> Path:
+    return Path(tempfile.mkdtemp(prefix=f".{name}.tmp-", dir=models_dir))
+
+
+def _replace_directory(staging: Path, destination: Path) -> None:
+    """Sustituye el directorio final solo cuando el staging está completo."""
+    backup = destination.with_name(f".{destination.name}.previous")
+    _remove_tree(backup)
+    if destination.exists():
+        destination.replace(backup)
+    try:
+        staging.replace(destination)
+    except BaseException:
+        if backup.exists() and not destination.exists():
+            backup.replace(destination)
+        raise
+    _remove_tree(backup)
 
 
 def export_bge_m3(models_dir: Path = MODELS_DIR) -> Path:
     """Exporta y cuantiza BGE-M3 desde la revisión fijada."""
+    models_dir = Path(models_dir)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = models_dir / EMBEDDING_DIR
+
+    if _marker_matches(
+        out_dir,
+        EMBEDDING_MODEL,
+        EMBEDDING_REVISION,
+        ("model.onnx", *EMBEDDING_FILES),
+    ):
+        _remove_intermediates(out_dir)
+        print(f"bge-m3 ya está en la revisión {EMBEDDING_REVISION}: {out_dir}")
+        return out_dir
+
     import huggingface_hub
 
-    out_dir = Path(models_dir) / EMBEDDING_DIR
-    source_dir = Path(
-        huggingface_hub.snapshot_download(
-            EMBEDDING_MODEL,
-            revision=EMBEDDING_REVISION,
-            allow_patterns=[
-                "onnx/*",
-                "tokenizer.json",
-                "tokenizer_config.json",
-                "config.json",
-                "sentencepiece.bpe.model",
-                "special_tokens_map.json",
-            ],
+    staging = _new_staging(models_dir, EMBEDDING_DIR)
+    try:
+        source_dir = Path(
+            huggingface_hub.snapshot_download(
+                EMBEDDING_MODEL,
+                revision=EMBEDDING_REVISION,
+                allow_patterns=["onnx/*", *EMBEDDING_FILES],
+            )
         )
-    )
-    out_dir.mkdir(parents=True, exist_ok=True)
+        onnx_source = source_dir / "onnx" / "model.onnx"
+        onnx_data_source = source_dir / "onnx" / "model.onnx_data"
+        fp32_path = staging / "model_fp32.onnx"
 
-    onnx_source = source_dir / "onnx" / "model.onnx"
-    onnx_data_source = source_dir / "onnx" / "model.onnx_data"
-    fp32_path = out_dir / "model_fp32.onnx"
-    int8_path = out_dir / "model.onnx"
-
-    if not int8_path.exists():
-        if not fp32_path.exists():
-            print("Copiando modelo ONNX fp32 de bge-m3...")
-            shutil.copy(onnx_source, fp32_path)
-        data_path = out_dir / "model.onnx_data"
-        if onnx_data_source.exists() and not data_path.exists():
-            shutil.copy(onnx_data_source, data_path)
+        print("Copiando modelo ONNX fp32 de bge-m3...")
+        shutil.copy(onnx_source, fp32_path)
+        if onnx_data_source.exists():
+            shutil.copy(onnx_data_source, staging / "model.onnx_data")
         _probe_onnx(fp32_path)
-        _quantize_fp32_onnx(fp32_path, int8_path)
-        for temporary in (fp32_path, out_dir / "model.onnx_data"):
-            temporary.unlink(missing_ok=True)
+        _quantize_fp32_onnx(fp32_path, staging / "model.onnx")
 
-    for name in (
-        "tokenizer.json",
-        "tokenizer_config.json",
-        "config.json",
-        "sentencepiece.bpe.model",
-        "special_tokens_map.json",
-    ):
-        shutil.copy(source_dir / name, out_dir / name)
+        for name in EMBEDDING_FILES:
+            shutil.copy(source_dir / name, staging / name)
+
+        _remove_intermediates(staging)
+        _write_marker(staging, EMBEDDING_MODEL, EMBEDDING_REVISION)
+        _replace_directory(staging, out_dir)
+    finally:
+        _remove_tree(staging)
 
     print(f"bge-m3 listo en {out_dir}")
     return out_dir
@@ -245,52 +324,68 @@ def export_bge_m3(models_dir: Path = MODELS_DIR) -> Path:
 
 def export_reranker(models_dir: Path = MODELS_DIR) -> Path:
     """Exporta y cuantiza el reranker desde la revisión fijada."""
+    models_dir = Path(models_dir)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = models_dir / RERANK_DIR
+
+    if _marker_matches(
+        out_dir, RERANK_MODEL, RERANK_REVISION, ("model_int8.onnx", "tokenizer.json")
+    ):
+        _remove_intermediates(out_dir)
+        print(f"reranker ya está en la revisión {RERANK_REVISION}: {out_dir}")
+        return out_dir
+
     import torch
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-    out_dir = Path(models_dir) / RERANK_DIR
-    out_dir.mkdir(parents=True, exist_ok=True)
+    staging = _new_staging(models_dir, RERANK_DIR)
+    try:
+        print(f"Descargando {RERANK_MODEL} (torch)...")
+        tokenizer = AutoTokenizer.from_pretrained(RERANK_MODEL, revision=RERANK_REVISION)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            RERANK_MODEL, revision=RERANK_REVISION
+        )
+        model.eval()
+        tokenizer.save_pretrained(staging)
 
-    print(f"Descargando {RERANK_MODEL} (torch)...")
-    tokenizer = AutoTokenizer.from_pretrained(RERANK_MODEL, revision=RERANK_REVISION)
-    model = AutoModelForSequenceClassification.from_pretrained(
-        RERANK_MODEL, revision=RERANK_REVISION
-    )
-    model.eval()
-    tokenizer.save_pretrained(out_dir)
+        dummy = tokenizer(
+            [("consulta de prueba", "documento de prueba")],
+            padding="max_length",
+            truncation=True,
+            max_length=32,
+            return_tensors="pt",
+        )
 
-    dummy = tokenizer(
-        [("consulta de prueba", "documento de prueba")],
-        padding="max_length",
-        truncation=True,
-        max_length=32,
-        return_tensors="pt",
-    )
+        fp32_path = staging / "model_fp32.onnx"
+        fp32_temporary = fp32_path.with_name(fp32_path.name + ".tmp")
+        print("Exportando reranker a ONNX fp32...")
+        with torch.no_grad():
+            torch.onnx.export(
+                model,
+                (dummy["input_ids"], dummy["attention_mask"]),
+                str(fp32_temporary),
+                input_names=["input_ids", "attention_mask"],
+                output_names=["logits"],
+                dynamic_axes={
+                    "input_ids": {0: "batch", 1: "seq"},
+                    "attention_mask": {0: "batch", 1: "seq"},
+                    "logits": {0: "batch"},
+                },
+                opset_version=17,
+                do_constant_folding=True,
+                dynamo=False,
+            )
+        if not fp32_temporary.is_file() or fp32_temporary.stat().st_size == 0:
+            raise RuntimeError("la exportación ONNX no produjo model_fp32.onnx")
+        fp32_temporary.replace(fp32_path)
 
-    fp32_path = out_dir / "model_fp32.onnx"
-    int8_path = out_dir / "model_int8.onnx"
-    if not int8_path.exists():
-        if not fp32_path.exists():
-            print("Exportando reranker a ONNX fp32...")
-            with torch.no_grad():
-                torch.onnx.export(
-                    model,
-                    (dummy["input_ids"], dummy["attention_mask"]),
-                    str(fp32_path),
-                    input_names=["input_ids", "attention_mask"],
-                    output_names=["logits"],
-                    dynamic_axes={
-                        "input_ids": {0: "batch", 1: "seq"},
-                        "attention_mask": {0: "batch", 1: "seq"},
-                        "logits": {0: "batch"},
-                    },
-                    opset_version=17,
-                    do_constant_folding=True,
-                    dynamo=False,
-                )
         _probe_onnx(fp32_path)
-        _quantize_fp32_onnx(fp32_path, int8_path)
-        fp32_path.unlink(missing_ok=True)
+        _quantize_fp32_onnx(fp32_path, staging / "model_int8.onnx")
+        _remove_intermediates(staging)
+        _write_marker(staging, RERANK_MODEL, RERANK_REVISION)
+        _replace_directory(staging, out_dir)
+    finally:
+        _remove_tree(staging)
 
     print(f"reranker listo en {out_dir}")
     return out_dir
