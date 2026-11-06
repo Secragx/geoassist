@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, geoassist-implementation]
+  pull_request:
+    branches: [main, geoassist-implementation]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - run: uv sync --group test
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+      - run: uv run pytest
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check model artifact secrets
+        id: secrets
+        run: |
+          if [ -z "${{ secrets.MODELS_ARTIFACT_URL }}" ] || [ -z "${{ secrets.MODELS_ARTIFACT_SHA256 }}" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::MODELS_ARTIFACT_URL o MODELS_ARTIFACT_SHA256 no definidos; se omite el build de api/sync."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build api and sync images
+        if: steps.secrets.outputs.missing == 'false'
+        run: docker compose build api sync

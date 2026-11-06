@@ -4,7 +4,7 @@ COMPOSE ?= docker compose
 UV ?= uv
 VERSION ?= 1.0.0
 
-.PHONY: build up down logs test lint shell db publish-models sync sync-status activate
+.PHONY: build up down logs test lint check eval shell db publish-models sync sync-status activate
 
 ## Construye la imagen de la API con el artefacto de modelos verificado.
 build:
@@ -27,6 +27,12 @@ lint:
 	$(UV) run ruff format --check .
 	$(UV) run ruff check .
 	$(UV) run mypy src
+
+check: lint
+	$(UV) run pytest
+
+eval:
+	$(UV) run python eval/evaluate.py
 
 ## Shell dentro del contenedor, sin arrancar la API.
 shell:
