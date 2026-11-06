@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from geoassist.models import InboundMessage
@@ -30,7 +31,7 @@ class OutgoingWebhookAdapter:
             rf"<at>[^<]*{re.escape(bot_name)}[^<]*</at>", re.IGNORECASE
         )
 
-    def verify(self, body: bytes, headers: dict[str, str]) -> None:
+    def verify(self, body: bytes, headers: Mapping[str, str]) -> None:
         """Valida la firma HMAC enviada por Teams.
 
         Raises:

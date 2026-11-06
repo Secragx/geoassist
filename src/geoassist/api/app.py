@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 
 from geoassist import __version__
 from geoassist.api.readiness import ReadinessProbe
-from geoassist.api.routes.health import router as health_router
 from geoassist.config import Settings, get_settings
+from geoassist.services.chat import ChatService
+from geoassist.storage.state import StateStore
+from geoassist.storage.versions import VersionManager
+from geoassist.teams.base import TeamsAdapter
 
 
 def _is_writable_directory(path: Path) -> bool:
@@ -55,14 +60,44 @@ def _default_probe(settings: Settings) -> ReadinessProbe:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class AppDependencies:
+    """Dependencias de aplicación inyectadas en ``app.state``."""
+
+    settings: Settings
+    adapter: TeamsAdapter
+    chat: ChatService | None = None
+    retriever: Any = None
+    versions: VersionManager | None = None
+    state: StateStore | None = None
+
+
+def _default_dependencies(settings: Settings) -> AppDependencies:
+    """Dependencias mínimas cuando no se inyectan explícitamente."""
+
+    from geoassist.teams.outgoing_webhook import OutgoingWebhookAdapter
+
+    return AppDependencies(
+        settings=settings,
+        adapter=OutgoingWebhookAdapter(
+            settings.teams_security_token.get_secret_value(),
+            settings.teams_bot_name,
+        ),
+    )
+
+
 def create_app(
     settings: Settings | None = None,
     probe: ReadinessProbe | None = None,
+    dependencies: AppDependencies | None = None,
 ) -> FastAPI:
     """Crea la aplicación y guarda la configuración y la sonda en ``app.state``."""
 
     resolved_settings = settings if settings is not None else get_settings()
     resolved_probe = probe if probe is not None else _default_probe(resolved_settings)
+    resolved_dependencies = (
+        dependencies if dependencies is not None else _default_dependencies(resolved_settings)
+    )
 
     expose_docs = resolved_settings.app_env != "production"
     app = FastAPI(
@@ -74,5 +109,18 @@ def create_app(
     )
     app.state.settings = resolved_settings
     app.state.probe = resolved_probe
+    app.state.dependencies = resolved_dependencies
+    app.state.rate_limiter = None
+
+    from geoassist.api.routes.debug import router as debug_router
+    from geoassist.api.routes.health import router as health_router
+    from geoassist.api.routes.teams import router as teams_router
+
     app.include_router(health_router)
+    app.include_router(teams_router)
+    app.include_router(debug_router)
     return app
+
+
+# Re-exportar para compatibilidad con consumidores que importen desde este módulo.
+__all__ = ["AppDependencies", "create_app"]

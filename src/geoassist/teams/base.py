@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Protocol
 
 from geoassist.models import InboundMessage
@@ -18,7 +19,7 @@ class InvalidPayload(Exception):
 class TeamsAdapter(Protocol):
     """Contrato para adaptadores de mensajes entrantes de Teams."""
 
-    def verify(self, body: bytes, headers: dict[str, str]) -> None:
+    def verify(self, body: bytes, headers: Mapping[str, str]) -> None:
         """Valida la firma HMAC del webhook saliente.
 
         Raises:
