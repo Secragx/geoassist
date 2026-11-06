@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -11,6 +12,12 @@ from typing import Any
 
 from geoassist.models import InboundMessage
 from geoassist.teams.base import InvalidPayload, TeamsAuthError
+
+
+def _require_dict(value: Any, name: str) -> dict[Any, Any]:
+    if not isinstance(value, dict):
+        raise InvalidPayload(f"{name} must be an object")
+    return value
 
 
 class OutgoingWebhookAdapter:
@@ -36,7 +43,7 @@ class OutgoingWebhookAdapter:
         expected_signature = auth_header[5:].strip()
         try:
             expected_digest = base64.b64decode(expected_signature)
-        except Exception as exc:
+        except (ValueError, binascii.Error) as exc:
             raise TeamsAuthError("Invalid base64 signature") from exc
 
         computed_digest = hmac.new(self._secret, body, hashlib.sha256).digest()
@@ -64,18 +71,24 @@ class OutgoingWebhookAdapter:
         if not activity_id:
             raise InvalidPayload("Missing activity id")
 
-        user_id = payload.get("from", {}).get("id")
+        from_payload = _require_dict(payload.get("from"), "from")
+        user_id = from_payload.get("id")
         if not user_id:
             raise InvalidPayload("Missing from.id")
 
-        conversation_id = payload.get("conversation", {}).get("id")
+        conversation_payload = _require_dict(payload.get("conversation"), "conversation")
+        conversation_id = conversation_payload.get("id")
         if not conversation_id:
             raise InvalidPayload("Missing conversation.id")
 
-        text = payload.get("text", "")
+        text = payload.get("text")
+        if text is None:
+            raise InvalidPayload("Missing text")
         text = self._mention_pattern.sub("", text).strip()
 
-        tenant_id = payload.get("channelData", {}).get("tenant", {}).get("id", "")
+        channel_data = _require_dict(payload.get("channelData", {}), "channelData")
+        tenant_payload = _require_dict(channel_data.get("tenant", {}), "channelData.tenant")
+        tenant_id = tenant_payload.get("id", "")
         service_url = payload.get("serviceUrl", "")
 
         return InboundMessage(

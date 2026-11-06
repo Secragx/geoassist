@@ -61,3 +61,74 @@ def test_missing_id_raises_invalid_payload():
 def test_reply_format():
     reply = OutgoingWebhookAdapter(SECRET, "GeoAssist").format_reply("hola")
     assert reply == {"type": "message", "text": "hola"}
+
+
+def test_missing_text_raises_invalid_payload():
+    body = json.dumps(
+        {
+            "type": "message",
+            "id": "act-1",
+            "from": {"id": "user-1"},
+            "conversation": {"id": "conv-1"},
+        }
+    ).encode()
+    with pytest.raises(InvalidPayload):
+        OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
+
+
+def test_malformed_from_raises_invalid_payload():
+    body = json.dumps(
+        {
+            "type": "message",
+            "id": "act-1",
+            "text": "hola",
+            "from": "not-a-dict",
+            "conversation": {"id": "conv-1"},
+        }
+    ).encode()
+    with pytest.raises(InvalidPayload):
+        OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
+
+
+def test_malformed_conversation_raises_invalid_payload():
+    body = json.dumps(
+        {
+            "type": "message",
+            "id": "act-1",
+            "text": "hola",
+            "from": {"id": "user-1"},
+            "conversation": 123,
+        }
+    ).encode()
+    with pytest.raises(InvalidPayload):
+        OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
+
+
+def test_malformed_channel_data_raises_invalid_payload():
+    body = json.dumps(
+        {
+            "type": "message",
+            "id": "act-1",
+            "text": "hola",
+            "from": {"id": "user-1"},
+            "conversation": {"id": "conv-1"},
+            "channelData": "not-a-dict",
+        }
+    ).encode()
+    with pytest.raises(InvalidPayload):
+        OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
+
+
+def test_malformed_tenant_raises_invalid_payload():
+    body = json.dumps(
+        {
+            "type": "message",
+            "id": "act-1",
+            "text": "hola",
+            "from": {"id": "user-1"},
+            "conversation": {"id": "conv-1"},
+            "channelData": {"tenant": "not-a-dict"},
+        }
+    ).encode()
+    with pytest.raises(InvalidPayload):
+        OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
