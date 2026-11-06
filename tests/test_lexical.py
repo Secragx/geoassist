@@ -13,3 +13,7 @@ def test_drops_short_tokens_and_operators():
 
 def test_empty_question_returns_empty_string():
     assert build_fts_query("   ") == ""
+
+
+def test_preserves_accented_terms():
+    assert build_fts_query("recepción") == '"recepción"'

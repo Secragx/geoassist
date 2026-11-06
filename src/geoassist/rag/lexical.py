@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 _FTS_OPERATORS = frozenset({"OR", "AND", "NOT", "NEAR"})
-_TOKEN_RE = re.compile(r"[a-zA-Z0-9]+")
+_TOKEN_RE = re.compile(r"[^\W_]+")
 
 
 def build_fts_query(question: str) -> str:
