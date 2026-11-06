@@ -64,7 +64,7 @@ async def teams_webhook(
             return cached
 
     limiter = _get_rate_limiter(request)
-    if not limiter.allow(message.conversation_id):
+    if not limiter.allow(message.user_id or message.conversation_id):
         reply = deps.adapter.format_reply(
             "Has superado el límite de mensajes por minuto. Espera un momento."
         )

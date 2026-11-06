@@ -102,8 +102,11 @@ class EvaluationRunner:
         for case in cases:
             question = str(case.get("question", ""))
             expected_answer = str(case.get("expected_answer", ""))
-            expected_sources = list(case.get("expected_sources", []) or [])
-            app_hint = case.get("app_hint")
+            expected_facts = list(case.get("expected_facts") or [])
+            expected = expected_answer or ", ".join(str(f) for f in expected_facts)
+            expected_sources = list(case.get("expected_sources") or case.get("expected_docs") or [])
+            app_hint = case.get("app_hint", case.get("app"))
+            must_abstain = bool(case.get("must_abstain", False))
 
             start = self._clock()
             try:
@@ -115,7 +118,7 @@ class EvaluationRunner:
                 results.append(
                     EvaluationResult(
                         question=question,
-                        expected=expected_answer,
+                        expected=expected,
                         actual="",
                         passed=False,
                         score=0.0,
@@ -188,10 +191,15 @@ class EvaluationRunner:
                 abstained_count += 1
 
             # passed: substring match (case-insensitive) if expected_answer present
-            if expected_answer:
+            if must_abstain:
+                passed = not sufficient
+            elif expected_answer:
                 passed = expected_answer.lower() in (actual or "").lower()
+            elif expected_facts:
+                low = (actual or "").lower()
+                passed = all(str(f).lower() in low for f in expected_facts)
             else:
-                passed = sufficient == (not bool(case.get("must_abstain", False)))
+                passed = sufficient
 
             if passed:
                 passed_count += 1
@@ -203,7 +211,7 @@ class EvaluationRunner:
             results.append(
                 EvaluationResult(
                     question=question,
-                    expected=expected_answer,
+                    expected=expected,
                     actual=actual or "",
                     passed=passed,
                     score=mrr,

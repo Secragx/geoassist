@@ -16,9 +16,9 @@ from geoassist.storage.migrations import apply_migrations
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations" / "state"
 
-_SESSION_TTL = timedelta(minutes=120)
 _ACTIVITY_TTL = timedelta(hours=24)
 _MAX_MESSAGES = 12
+_DEFAULT_SESSION_TTL_MINUTES = 120
 
 
 def _utc_now() -> str:
@@ -48,8 +48,11 @@ def session_key(tenant_id: str | None, conversation_id: str, user_id: str) -> st
 class StateStore:
     """Persistencia SQLite de sesiones, historial de mensajes y caché de actividades."""
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(
+        self, db_path: Path, session_ttl_minutes: int = _DEFAULT_SESSION_TTL_MINUTES
+    ) -> None:
         self._db_path = Path(db_path)
+        self._session_ttl = timedelta(minutes=session_ttl_minutes)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         apply_migrations(self._db_path, _MIGRATIONS_DIR)
 
@@ -74,7 +77,7 @@ class StateStore:
             return SessionState(session_key=key, app_hint=None, history=())
 
         last_seen_at = _parse_iso(row[1])
-        if now - last_seen_at > _SESSION_TTL:
+        if now - last_seen_at > self._session_ttl:
             return SessionState(session_key=key, app_hint=None, history=())
 
         with self._connect() as conn:
@@ -192,7 +195,7 @@ class StateStore:
     def purge_expired(self, now: datetime) -> None:
         """Elimina sesiones, mensajes y actividades cuyo TTL haya vencido."""
 
-        session_cutoff = _isoformat(now - _SESSION_TTL)
+        session_cutoff = _isoformat(now - self._session_ttl)
         activity_cutoff = _isoformat(now - _ACTIVITY_TTL)
 
         with self._connect() as conn:

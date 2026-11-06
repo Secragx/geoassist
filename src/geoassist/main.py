@@ -36,7 +36,10 @@ def _build_dependencies(settings: Settings) -> AppDependencies:
         settings.teams_security_token.get_secret_value(),
         settings.teams_bot_name,
     )
-    state = StateStore(settings.data_dir / "state.db")
+    state = StateStore(
+        settings.data_dir / "state.db",
+        session_ttl_minutes=settings.session_ttl_minutes,
+    )
 
     versions = VersionManager(settings.data_dir / "corpus")
     version = versions.refresh()
@@ -48,7 +51,7 @@ def _build_dependencies(settings: Settings) -> AppDependencies:
 
     _warmup_models(embedder, reranker)
 
-    rules_path = Path(__file__).resolve().parents[1] / "config" / "corpus_rules.yml"
+    rules_path = Path(__file__).resolve().parents[2] / "config" / "corpus_rules.yml"
     rules = CorpusRules.load(rules_path)
     detector = build_app_detector(rules)
 

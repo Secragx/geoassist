@@ -103,7 +103,7 @@ class Ingestor:
             report = self._build_in(work_dir, version_id, git_commit=git_commit)
             os.replace(work_dir, output_dir)
             return report
-        except BaseException:
+        except Exception:
             if work_dir.exists():
                 shutil.rmtree(work_dir)
             raise
