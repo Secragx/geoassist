@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "geoassist"
+version = "0.1.0"
+description = "Asistente RAG de soporte L2 para Microsoft Teams"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Secragx" }]
+
+dependencies = [
+    "faiss-cpu>=1.9,<2",
+    "fastapi>=0.115,<1",
+    "httpx>=0.27,<1",
+    "numpy>=1.26,<3",
+    "onnxruntime>=1.20,<2",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "python-frontmatter>=1.1,<2",
+    "PyYAML>=6.0,<7",
+    "structlog>=24.4,<26",
+    "tokenizers>=0.20,<1",
+    "uvicorn[standard]>=0.32,<1",
+]
+
+[project.optional-dependencies]
+# Herramientas de mantenimiento (exportación y empaquetado de modelos).
+tools = []
+# Dependencias de la imagen `sync` (generación de PDF).
+sync = [
+    "pypandoc>=1.14,<2",
+]
+
+[dependency-groups]
+test = [
+    "httpx>=0.27,<1",
+    "mypy>=1.13,<2",
+    "pytest>=8.3,<9",
+    "ruff>=0.7,<1",
+]
+
+[tool.uv]
+# `uv sync` instala también el grupo de pruebas para que el clon limpio
+# pueda ejecutar `pytest` sin flags adicionales.
+default-groups = ["test"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/geoassist"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "SIM", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Las pruebas siguen literalmente los fragmentos del plan de implementación.
+"tests/**" = ["E501", "I001"]
+
+[tool.mypy]
+python_version = "3.12"
+disallow_untyped_defs = true
+warn_unused_configs = true
