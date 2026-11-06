@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -12,25 +13,38 @@ from geoassist.api.routes.health import router as health_router
 from geoassist.config import Settings, get_settings
 
 
+def _is_writable_directory(path: Path) -> bool:
+    """Indica si la ruta es un directorio explícito y escribible."""
+
+    return str(path).strip() not in {"", "."} and path.is_dir() and os.access(path, os.W_OK)
+
+
 def _default_probe(settings: Settings) -> ReadinessProbe:
-    """Sonda mínima: datos accesibles, modelos presentes y LLM configurado.
+    """Sonda mínima: datos escribibles, modelos presentes y LLM configurado.
 
     No llama al LLM ni carga los modelos; solo verifica que el runtime tenga lo
-    necesario para atender tráfico. Las tareas de ingesta añadirán más
-    comprobaciones cuando exista una versión de corpus publicada.
+    necesario para atender tráfico. Las tareas de ingesta añadirán la
+    comprobación de la versión de corpus publicada.
     """
 
     def data_ready() -> bool:
-        return settings.data_dir.is_dir()
+        return _is_writable_directory(settings.data_dir)
 
     def models_ready() -> bool:
-        return (
-            Path(settings.embedding_model_path).is_dir()
-            and Path(settings.rerank_model_path).is_dir()
+        embedding_root = settings.embedding_model_path.strip()
+        rerank_root = settings.rerank_model_path.strip()
+        if not embedding_root or not rerank_root:
+            return False
+        required = (
+            Path(embedding_root) / "model.onnx",
+            Path(embedding_root) / "tokenizer.json",
+            Path(rerank_root) / "model_int8.onnx",
         )
+        return all(path.is_file() for path in required)
 
     def llm_ready() -> bool:
-        return bool(settings.llm_base_url.strip())
+        api_key = settings.llm_api_key.get_secret_value().strip()
+        return bool(settings.llm_base_url.strip() and api_key)
 
     return ReadinessProbe(
         {

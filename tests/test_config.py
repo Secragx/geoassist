@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 from geoassist.config import Settings
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def make_settings(**overrides):
@@ -44,3 +48,28 @@ def test_defaults_match_spec():
     assert settings.rate_limit_per_minute == 6
     assert settings.manuals_root_rel == "data_source/manuales"
     assert settings.assets_root_rel == "data_source/assets"
+
+
+def test_env_example_loads_with_compose_only_variables(monkeypatch):
+    for name in (
+        "APP_ENV",
+        "TEAMS_BOT_NAME",
+        "LLM_BASE_URL",
+        "LLM_MODEL",
+        "LLM_TIMEOUT_MS",
+        "DATA_DIR",
+        "MANUALS_DIR",
+        "SESSION_TTL_MINUTES",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = Settings(_env_file=ROOT / ".env.example")
+
+    assert settings.app_env == "development"
+    assert settings.teams_bot_name == "GeoAssist"
+    assert settings.llm_base_url == "https://api.deepseek.com"
+    assert settings.llm_model == "deepseek-chat"
+    assert settings.llm_timeout_ms == 2500
+    assert settings.data_dir == Path("/data")
+    assert settings.manuals_dir == Path("/manuals")
+    assert settings.session_ttl_minutes == 120

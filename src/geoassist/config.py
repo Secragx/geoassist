@@ -3,6 +3,8 @@
 Todos los valores se leen del entorno (o de un `.env` en desarrollo) mediante
 ``pydantic-settings``. En producción la validación es *fail-closed*: el proceso
 no arranca si falta un secreto, una política de datos o una ruta de modelo.
+Las claves desconocidas del entorno se ignoran para que el mismo `.env` pueda
+incluir variables de Docker Compose sin romper el arranque.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="forbid",
+        extra="ignore",
     )
 
     app_env: AppEnv = "development"
