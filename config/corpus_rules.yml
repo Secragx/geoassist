@@ -1,0 +1,29 @@
+version: 1
+ignore:
+  - "**/.git/**"
+  - "**/_drafts/**"
+  - "**/model_manuales.md"
+
+apps:
+  - match: "GEOINVENTARIOS"
+    app: geoinventarios
+  - match: "GEOPRICER"
+    app: geopricer
+    aliases: ["geoprice", "geopricer"]
+  - match: "GEOPOS"
+    app: geopos
+  - match: "GEOPROMOTION"
+    app: geopromotion
+
+status:
+  - match: "VERSIONES POR APROBAR"
+    status: pending
+  - match: "VERSIONES APROBADAS"
+    status: approved
+  - match: "VERSIONES ANTERIORES"
+    status: archived
+
+defaults:
+  app: unknown
+  status: unknown
+  on_unmatched: warn
