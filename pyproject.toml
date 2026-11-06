@@ -71,7 +71,7 @@ select = ["B", "E", "F", "I", "SIM", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 # Las pruebas conservan algunas aserciones largas del plan de implementación.
-"tests/**" = ["E501", "I001"]
+"tests/**" = ["E501", "I001", "UP017"]
 
 [tool.mypy]
 python_version = "3.12"
