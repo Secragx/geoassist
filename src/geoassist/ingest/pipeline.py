@@ -82,7 +82,13 @@ class Ingestor:
             else _resolve_migrations_dir(loader.repo_root)
         )
 
-    def build(self, version_id: str, output_dir: Path) -> IngestReport:
+    def build(
+        self,
+        version_id: str,
+        output_dir: Path,
+        *,
+        git_commit: str | None = None,
+    ) -> IngestReport:
         """Construye el corpus en un directorio temporal y lo publica atómicamente."""
 
         output_dir = Path(output_dir)
@@ -94,7 +100,7 @@ class Ingestor:
         )
 
         try:
-            report = self._build_in(work_dir, version_id)
+            report = self._build_in(work_dir, version_id, git_commit=git_commit)
             os.replace(work_dir, output_dir)
             return report
         except BaseException:
@@ -102,7 +108,13 @@ class Ingestor:
                 shutil.rmtree(work_dir)
             raise
 
-    def _build_in(self, work_dir: Path, version_id: str) -> IngestReport:
+    def _build_in(
+        self,
+        work_dir: Path,
+        version_id: str,
+        *,
+        git_commit: str | None = None,
+    ) -> IngestReport:
         db_path = work_dir / "corpus.db"
         index_path = work_dir / "faiss.index"
         manifest_path = work_dir / "manifest.json"
@@ -196,9 +208,12 @@ class Ingestor:
 
         VectorStore.build(index_path, np.asarray(vectors, dtype=np.float32), ids=chunk_row_ids)
 
+        commit = git_commit if git_commit is not None else version_id
+
         _write_corpus_meta(
             db_path,
             version_id=version_id,
+            git_commit=commit,
             doc_count=len(documents),
             chunk_count=len(chunks),
             dimension=dimension,
@@ -220,7 +235,7 @@ class Ingestor:
             "db_sha256": db_sha256,
             "index_sha256": index_sha256,
             "built_at": _utc_now(),
-            "git_commit": version_id,
+            "git_commit": commit,
         }
         manifest_path.write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False),
@@ -283,6 +298,7 @@ def _write_corpus_meta(
     db_path: Path,
     *,
     version_id: str,
+    git_commit: str,
     doc_count: int,
     chunk_count: int,
     dimension: int,
@@ -295,7 +311,7 @@ def _write_corpus_meta(
         conn.execute("PRAGMA foreign_keys = ON")
         entries = [
             ("version_id", version_id),
-            ("git_commit", version_id),
+            ("git_commit", git_commit),
             ("built_at", _utc_now()),
             ("doc_count", str(doc_count)),
             ("chunk_count", str(chunk_count)),

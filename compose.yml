@@ -49,6 +49,28 @@ services:
       start_period: 30s
     # Sin puertos publicados: solo caddy (prod) o ngrok (dev) exponen la API.
 
+  sync:
+    image: geoassist-sync:latest
+    build:
+      context: .
+      dockerfile: docker/sync/Dockerfile
+      args:
+        MODELS_ARTIFACT_URL: ${MODELS_ARTIFACT_URL:-}
+        MODELS_ARTIFACT_SHA256: ${MODELS_ARTIFACT_SHA256:-}
+    env_file:
+      - path: .env
+        required: false
+    profiles: ["tools"]
+    environment:
+      DATA_DIR: /data
+      MANUALS_DIR: /manuals
+    volumes:
+      - geoassist_data:/data
+      - geoassist_manuals:/manuals
+    networks:
+      - internal
+    # Sin puertos publicados: la sincronización es un trabajo batch.
+
   caddy:
     image: caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17
     profiles: ["prod"]
@@ -84,6 +106,7 @@ services:
 
 volumes:
   geoassist_data:
+  geoassist_manuals:
   caddy_data:
   caddy_config:
 
