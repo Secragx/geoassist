@@ -8,7 +8,6 @@ de serializar, cualquier clave cuyo nombre contenga ``token``, ``secret``,
 from __future__ import annotations
 
 import logging
-import sys
 from collections.abc import Mapping, MutableMapping
 from typing import Any
 
@@ -51,6 +50,25 @@ def _level_value(level: str) -> int:
         raise ValueError(f"nivel de log inválido: {level!r}") from None
 
 
+class _DynamicPrintLogger(structlog.PrintLogger):
+    """PrintLogger que resuelve ``sys.stdout`` en cada mensaje.
+
+    A diferencia de ``PrintLogger(file=sys.stdout)``, no deja un stream fijo
+    capturado al configurar: escribe siempre en el ``sys.stdout`` vigente.
+    """
+
+    def msg(self, message: str) -> None:
+        print(message, flush=True)
+
+
+class _DynamicPrintLoggerFactory:
+    """Crea :class:`_DynamicPrintLogger` sin ligar ningún stream."""
+
+    def __call__(self, *args: Any, **kwargs: Any) -> _DynamicPrintLogger:
+        del args, kwargs
+        return _DynamicPrintLogger()
+
+
 def configure_logging(level: str) -> None:
     """Configura structlog para emitir JSON a stdout desde este momento."""
 
@@ -63,7 +81,7 @@ def configure_logging(level: str) -> None:
             structlog.processors.JSONRenderer(ensure_ascii=False),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(_level_value(level)),
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        logger_factory=_DynamicPrintLoggerFactory(),
         cache_logger_on_first_use=False,
     )
 
