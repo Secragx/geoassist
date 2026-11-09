@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     llm_data_policy: LLMDataPolicy | None = None
     llm_allowed_hosts: Annotated[tuple[str, ...], NoDecode] = ()
 
+    # Interpretación de consultas (QueryWriter)
+    query_rewrite_enabled: bool = False
+    query_rewrite_cache: int = Field(default=128, gt=0)
+    query_rewrite_timeout_ms: int = Field(default=1200, gt=0)
+
+    # Presupuesto total de latencia del pipeline (ms)
+    total_budget_ms: int = Field(default=8000, gt=0)
+
     # Modelos ONNX
     embedding_model_path: str = "/app/models/bge-m3-int8"
     rerank_model_path: str = "/app/models/mmarco-mMiniLMv2-L12-H384-v1-int8"

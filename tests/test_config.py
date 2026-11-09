@@ -73,3 +73,18 @@ def test_env_example_loads_with_compose_only_variables(monkeypatch):
     assert settings.data_dir == Path("/data")
     assert settings.manuals_dir == Path("/manuals")
     assert settings.session_ttl_minutes == 120
+
+
+def test_query_rewrite_and_budget_defaults():
+    settings = make_settings()
+    assert settings.query_rewrite_enabled is False
+    assert settings.query_rewrite_cache == 128
+    assert settings.query_rewrite_timeout_ms == 1200
+    assert settings.total_budget_ms == 8000
+
+
+def test_budget_and_timeouts_must_be_positive():
+    with pytest.raises(ValidationError):
+        make_settings(total_budget_ms=0)
+    with pytest.raises(ValidationError):
+        make_settings(query_rewrite_timeout_ms=0)
