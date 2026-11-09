@@ -14,24 +14,23 @@ from geoassist.models import InboundMessage
 from geoassist.rag.apps import AppDetector
 from geoassist.rag.prompt import build_fallback, build_messages
 from geoassist.rag.retriever import Retriever
+from geoassist.rag.rewrite import LocalQueryInterpreter, QueryRewriter
 from geoassist.storage.state import StateStore
 from geoassist.storage.state import session_key as _build_session_key
 
 logger = get_logger(__name__)
 
-_TOTAL_BUDGET_MS = 4500
-_RETRIEVAL_BUDGET_MS = int(_TOTAL_BUDGET_MS * 0.25)
-_GENERATION_BUDGET_MS = int(_TOTAL_BUDGET_MS * 0.55)
-_STATE_BUDGET_MS = int(_TOTAL_BUDGET_MS * 0.15)
-_BUFFER_BUDGET_MS = (
-    _TOTAL_BUDGET_MS - _RETRIEVAL_BUDGET_MS - _GENERATION_BUDGET_MS - _STATE_BUDGET_MS
-)
+_TOTAL_BUDGET_MS = 8000
+_RETRIEVAL_SHARE = 0.20
+_GENERATION_SHARE = 0.65
+_STATE_SHARE = 0.10
 
 _MAX_LLM_MS = 2500
 
-# Generación acotada al presupuesto: con ~130-150 tok/s más ~0.8 s de primer
-# token, 180 tokens terminan por debajo del deadline de generación (2.475 s).
-_MAX_COMPLETION_TOKENS = 180
+# Generación acotada para respuestas largas: el prompt pide el procedimiento
+# completo y 500 tokens es el techo que DeepSeek cierra dentro del presupuesto
+# de generación con TOTAL_BUDGET_MS=8000.
+_MAX_COMPLETION_TOKENS = 500
 
 _ABSTENTION_MESSAGE = (
     "No encontré información relevante para responder. "
@@ -86,6 +85,9 @@ class ChatService:
         clock: Callable[[], float] = time.monotonic,
         session_ttl_minutes: int = 120,
         max_llm_ms: int = _MAX_LLM_MS,
+        interpreter: LocalQueryInterpreter | None = None,
+        rewriter: QueryRewriter | None = None,
+        total_budget_ms: int = _TOTAL_BUDGET_MS,
     ) -> None:
         self._state = state
         self._retriever = retriever
@@ -94,6 +96,11 @@ class ChatService:
         self._clock = clock
         self._session_ttl_minutes = session_ttl_minutes
         self._max_llm_ms = max_llm_ms
+        self._interpreter = interpreter
+        self._rewriter = rewriter
+        self._retrieval_budget_ms = int(total_budget_ms * _RETRIEVAL_SHARE)
+        self._generation_budget_ms = int(total_budget_ms * _GENERATION_SHARE)
+        self._state_budget_ms = int(total_budget_ms * _STATE_SHARE)
 
     def handle(self, message: InboundMessage) -> ChatOutcome:
         """Resuelve una pregunta y devuelve la respuesta con metadatos."""
@@ -106,14 +113,25 @@ class ChatService:
         )
         session = self._state.get_session(session_key, now)
 
+        interpreted = (
+            self._interpreter.interpret(message.text)
+            if self._interpreter is not None
+            else message.text
+        )
+        query = (
+            self._rewriter.rewrite(interpreted, session.history)
+            if self._rewriter is not None
+            else interpreted
+        )
+
         app_filter = None
         if self._detector is not None:
-            app_filter = self._detector.detect(message.text)
+            app_filter = self._detector.detect(interpreted)
         if app_filter is None:
             app_filter = session.app_hint
 
-        retrieval_deadline = Deadline(_RETRIEVAL_BUDGET_MS, self._clock)
-        result = self._retriever.retrieve(message.text, app_filter=app_filter)
+        retrieval_deadline = Deadline(self._retrieval_budget_ms, self._clock)
+        result = self._retriever.retrieve(query, app_filter=app_filter)
         if retrieval_deadline.expired():
             logger.warning(
                 "retrieval_exceeded_budget",
@@ -140,7 +158,7 @@ class ChatService:
             )
 
         messages = build_messages(message.text, session.history, result.chunks)
-        generation_deadline = Deadline(_GENERATION_BUDGET_MS, self._clock)
+        generation_deadline = Deadline(self._generation_budget_ms, self._clock)
         llm_timeout_ms = min(self._max_llm_ms, generation_deadline.remaining_ms())
         llm_timeout_s = max(0.0, llm_timeout_ms / 1000.0)
 
@@ -163,7 +181,7 @@ class ChatService:
             degraded = True
 
         sources = _chunks_to_sources(result.chunks)
-        state_deadline = Deadline(_STATE_BUDGET_MS, self._clock)
+        state_deadline = Deadline(self._state_budget_ms, self._clock)
         self._persist_turn(
             session_key=session_key,
             message=message,

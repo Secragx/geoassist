@@ -16,9 +16,11 @@ class FakeRetriever:
     def __init__(self, result):
         self.result = result
         self.calls = 0
+        self.seen_question = None
 
     def retrieve(self, question, app_filter=None):
         self.calls += 1
+        self.seen_question = question
         return self.result
 
 
@@ -81,14 +83,6 @@ def test_second_turn_sends_history_to_llm(tmp_path):
     assert roles[1:3] == ["user", "assistant"]
 
 
-def test_generation_caps_completion_tokens_to_fit_budget(tmp_path):
-    llm = FakeLLM()
-    result = RetrievalResult((CHUNK,), True, None, {})
-    make_service(tmp_path, result, llm).handle(MESSAGE)
-    assert llm.last_max_tokens is not None
-    assert llm.last_max_tokens <= 200
-
-
 def test_llm_timeout_follows_service_configuration(tmp_path):
     from geoassist.services.chat import ChatService
 
@@ -104,3 +98,70 @@ def test_llm_timeout_follows_service_configuration(tmp_path):
     service.handle(MESSAGE)
     assert llm.last_timeout_s is not None
     assert llm.last_timeout_s <= 1.2
+
+
+class RecordingInterpreter:
+    def __init__(self, out):
+        self.out, self.seen = out, None
+
+    def interpret(self, text):
+        self.seen = text
+        return self.out
+
+
+class RecordingRewriter:
+    def __init__(self, out):
+        self.out, self.seen = out, None
+
+    def rewrite(self, query, history):
+        self.seen = query
+        return self.out
+
+
+def test_interpreter_and_rewriter_feed_retrieval(tmp_path):
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    retriever = FakeRetriever(result)
+    interpreter = RecordingInterpreter("geopos no carga")
+    rewriter = RecordingRewriter("geopos no abre ni carga")
+    service = ChatService(
+        StateStore(tmp_path / "state.db"), retriever, llm, FakeDetector(),
+        interpreter=interpreter, rewriter=rewriter,
+    )
+    service.handle(MESSAGE)
+    assert interpreter.seen == MESSAGE.text
+    assert rewriter.seen == "geopos no carga"
+    assert retriever.seen_question == "geopos no abre ni carga"
+
+
+def test_generation_receives_original_question_not_rewrite(tmp_path):
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    rewriter = RecordingRewriter("consulta inyectada")
+    service = ChatService(
+        StateStore(tmp_path / "state.db"), FakeRetriever(result), llm, FakeDetector(),
+        rewriter=rewriter,
+    )
+    service.handle(MESSAGE)
+    user_msgs = [m["content"] for m in llm.messages if m["role"] == "user"]
+    assert any(MESSAGE.text in m for m in user_msgs)
+    assert not any("consulta inyectada" in m for m in user_msgs)
+
+
+def test_budget_split_follows_total_budget_ms(tmp_path):
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    service = ChatService(
+        StateStore(tmp_path / "state.db"), FakeRetriever(result), llm, FakeDetector(),
+        max_llm_ms=100_000, total_budget_ms=2000,
+    )
+    service.handle(MESSAGE)
+    # generación = 65 % de 2000 = 1300 ms
+    assert llm.last_timeout_s <= 1.3
+
+
+def test_generation_asks_for_long_enriched_answers(tmp_path):
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    make_service(tmp_path, result, llm).handle(MESSAGE)
+    assert llm.last_max_tokens == 500
