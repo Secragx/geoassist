@@ -28,6 +28,7 @@ class LLMClient(Protocol):
         timeout_s: float,
         max_tokens: int = 500,
         temperature: float = 0.1,
+        max_attempts: int = 2,
     ) -> str:
         """Envía los mensajes y devuelve el contenido generado."""
         ...

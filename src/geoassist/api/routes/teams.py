@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from geoassist.api.app import AppDependencies
 from geoassist.api.ratelimit import RateLimiter
@@ -76,7 +77,9 @@ async def teams_webhook(
     if deps.chat is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Servicio de chat no disponible")
 
-    outcome = deps.chat.handle(message)
+    # El pipeline es CPU/IO pesado: se ejecuta fuera del event loop para no
+    # serializar a los asesores ni estancar /health durante una respuesta.
+    outcome = await run_in_threadpool(deps.chat.handle, message)
     reply = deps.adapter.format_reply(outcome.text)
 
     if deps.state is not None:

@@ -18,7 +18,7 @@ from geoassist.ingest.rules import normalize_text
 from geoassist.models import ChatMessage
 
 MIN_TOKEN_LEN = 4
-ALIAS_CUTOFF = 0.85
+ALIAS_CUTOFF = 0.9
 VOCAB_CUTOFF = 0.9
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -124,6 +124,7 @@ class QueryRewriter:
                 messages,
                 timeout_s=self._timeout_s,
                 max_tokens=_REWRITE_MAX_TOKENS,
+                max_attempts=1,
             )
         except Exception:
             return query

@@ -25,7 +25,19 @@ _RETRIEVAL_SHARE = 0.20
 _GENERATION_SHARE = 0.65
 _STATE_SHARE = 0.10
 
-_MAX_LLM_MS = 2500
+_MAX_LLM_MS = 5000
+
+
+def _completion_tokens_for(llm_timeout_s: float) -> int:
+    """Ajusta el tope de generación al timeout disponible.
+
+    Con ~130-150 tok/s y ~0.8 s de primer token, el presupuesto útil es
+    (timeout - 0.8) s; 120 tok/s deja margen. Así los perfiles de
+    presupuesto reducido reciben respuestas más cortas en vez de timeouts.
+    """
+    usable = max(0.0, llm_timeout_s - 0.8) * 120
+    return max(150, min(_MAX_COMPLETION_TOKENS, int(usable)))
+
 
 # Generación acotada para respuestas largas: el prompt pide el procedimiento
 # completo y 500 tokens es el techo que DeepSeek cierra dentro del presupuesto
@@ -166,7 +178,7 @@ class ChatService:
             answer = self._llm.complete(
                 messages,
                 timeout_s=llm_timeout_s,
-                max_tokens=_MAX_COMPLETION_TOKENS,
+                max_tokens=_completion_tokens_for(llm_timeout_s),
                 temperature=0.1,
             )
             degraded = False

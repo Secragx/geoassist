@@ -192,3 +192,18 @@ def test_generation_receives_interpreted_question(tmp_path):
     service.handle(MESSAGE)
     user_msgs = [m["content"] for m in llm.messages if m["role"] == "user"]
     assert any("geopos no carga" in m for m in user_msgs)
+
+
+def test_completion_tokens_fit_available_timeout(tmp_path):
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    service = ChatService(
+        StateStore(tmp_path / "state.db"),
+        FakeRetriever(result),
+        llm,
+        FakeDetector(),
+        max_llm_ms=3000,
+    )
+    service.handle(MESSAGE)
+    # 3000 ms de timeout no alcanzan para 500 tokens: el tope debe bajar.
+    assert 150 <= llm.last_max_tokens <= 300

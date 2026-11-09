@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.deepseek.com"
     llm_api_key: SecretStr = SecretStr("")
     llm_model: str = "deepseek-chat"
-    llm_timeout_ms: int = Field(default=2500, gt=0)
+    llm_timeout_ms: int = Field(default=5000, gt=0)
     llm_data_policy: LLMDataPolicy | None = None
     llm_allowed_hosts: Annotated[tuple[str, ...], NoDecode] = ()
 

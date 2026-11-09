@@ -69,7 +69,7 @@ def test_env_example_loads_with_compose_only_variables(monkeypatch):
     assert settings.teams_bot_name == "GeoAssist"
     assert settings.llm_base_url == "https://api.deepseek.com"
     assert settings.llm_model == "deepseek-chat"
-    assert settings.llm_timeout_ms == 2500
+    assert settings.llm_timeout_ms == 5000
     assert settings.data_dir == Path("/data")
     assert settings.manuals_dir == Path("/manuals")
     assert settings.session_ttl_minutes == 120

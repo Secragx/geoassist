@@ -53,8 +53,13 @@ class OpenAICompatibleClient:
         timeout_s: float,
         max_tokens: int = 500,
         temperature: float = 0.1,
+        max_attempts: int = 2,
     ) -> str:
-        """Envía los mensajes y devuelve el texto generado."""
+        """Envía los mensajes y devuelve el texto generado.
+
+        ``max_attempts`` acota los reintentos ante 429/5xx (1 = sin reintentar,
+        para llamadas con presupuesto estricto como la reescritura).
+        """
 
         body = {
             "model": self._model,
@@ -62,7 +67,6 @@ class OpenAICompatibleClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
-        max_attempts = 2
 
         for attempt in range(1, max_attempts + 1):
             try:

@@ -119,3 +119,42 @@ def test_oversized_body_returns_413():
         "/teams/webhook", content=body, headers=signed(body)
     )
     assert response.status_code == 413
+
+
+def test_webhook_does_not_block_event_loop():
+    import asyncio
+    import time
+
+    import httpx
+    from httpx import ASGITransport
+
+    from geoassist.services.chat import ChatOutcome
+
+    class SlowService:
+        def handle(self, message):
+            time.sleep(0.3)
+            return ChatOutcome("ok", False, (), 10)
+
+    async def main():
+        app = app_with(SlowService())
+        ticks = 0
+
+        async def ticker():
+            nonlocal ticks
+            for _ in range(10):
+                await asyncio.sleep(0.02)
+                ticks += 1
+
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            task = asyncio.create_task(ticker())
+            resp = await client.post("/webhook", content=BODY, headers=signed())
+            ticks_during_request = ticks
+            await task
+        return resp, ticks_during_request
+
+    resp, ticks_during_request = asyncio.run(main())
+    assert resp.status_code == 200
+    # Si el handler bloqueara el event loop, el ticker no avanzaría durante la
+    # petición (0.3 s de servicio lento ≈ 10 ticks posibles).
+    assert ticks_during_request >= 5

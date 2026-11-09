@@ -70,7 +70,7 @@ Copiar `.env.example` a `.env`. En `APP_ENV=production` la aplicación es
 | `LLM_BASE_URL` | `https://api.deepseek.com` | Sí | Endpoint compatible con OpenAI |
 | `LLM_API_KEY` | — | Sí en prod | Clave del LLM |
 | `LLM_MODEL` | `deepseek-chat` | Sí | Modelo de chat |
-| `LLM_TIMEOUT_MS` | `2500` | No | Timeout de generación (ms) |
+| `LLM_TIMEOUT_MS` | `5000` | No | Timeout de generación (ms) |
 | `LLM_DATA_POLICY` | — | Sí en prod | `external_approved` o `on_prem_only` |
 | `LLM_ALLOWED_HOSTS` | — | Si `on_prem_only` | Hosts permitidos (coma o JSON) |
 | `EMBEDDING_MODEL_PATH` | `/app/models/bge-m3-int8` | Sí | Ruta del modelo de embeddings |
