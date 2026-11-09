@@ -99,6 +99,7 @@ WORKDIR /app
 COPY --from=builder --chown=10001:10001 /app/.venv /app/.venv
 COPY --from=builder --chown=10001:10001 /app/src /app/src
 COPY --from=model-artifact --chown=10001:10001 /app/models /app/models
+COPY --chown=10001:10001 config /app/config
 COPY --chown=10001:10001 migrations /app/migrations
 
 USER 10001:10001

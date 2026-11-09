@@ -67,6 +67,16 @@ services:
     environment:
       DATA_DIR: /data
       MANUALS_DIR: /manuals
+    # /manuals_src es un bind mount con otro uid que el del contenedor; git
+    # exige safe.directory en config global (no acepta -c ni variables de
+    # entorno para esta comprobación) antes de clonar el repo local.
+    command:
+      - sh
+      - -c
+      - |
+        git config --global --add safe.directory /manuals_src
+        git config --global --add safe.directory /manuals_src/.git
+        exec python -m geoassist.sync
     volumes:
       - geoassist_data:/data
       - geoassist_manuals:/manuals
