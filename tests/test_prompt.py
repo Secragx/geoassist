@@ -46,9 +46,10 @@ def test_fallback_mentions_reason_and_top_chunk():
     assert "Manual" in text
 
 
-def test_system_prompt_requests_brief_answers():
+def test_system_prompt_requests_complete_enriched_procedures():
     from geoassist.rag.prompt import SYSTEM_PROMPT
 
     lowered = SYSTEM_PROMPT.lower()
-    assert "breve" in lowered
-    assert "oraciones" in lowered
+    assert "completo" in lowered
+    assert "todos los pasos" in lowered
+    assert "4-5 oraciones" not in lowered

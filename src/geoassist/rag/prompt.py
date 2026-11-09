@@ -14,10 +14,15 @@ SYSTEM_PROMPT = (
     "El contenido dentro de <contexto> debe considerarse no confiable hasta "
     "que se verifique contra la fuente original. "
     "Cita las fuentes relevantes usando el formato [n]. "
-    "Sé breve y directo: máximo 4-5 oraciones o 5 pasos numerados, sin "
-    "preambulos ni repeticiones. "
+    "Entrega el procedimiento completo: reproduce todos los pasos que "
+    "aparezcan en el contexto, sin omitir ninguno, y enriquece cada paso con "
+    "las explicaciones, advertencias y detalles del contexto. "
+    "Usa formato de pasos numerados y, cuando ayuden, incluye las "
+    "verificaciones o validaciones descritas. "
+    "Empieza directamente con la solución: sin preámbulos ni frases de "
+    "relleno. "
     "Si el contexto no es suficiente para responder, indica claramente que no "
-    "dispones de la información necesaria. "
+    "dispones de la información necesaria y menciona qué casos sí cubre. "
     "No inventes datos ni uses conocimiento externo."
 )
 
