@@ -42,6 +42,25 @@ def test_verify_is_skipped_when_allow_unsigned_and_empty_secret():
     adapter.verify(BODY, {"Authorization": "HMAC bad"})
 
 
+def test_constructor_warns_loudly_when_hmac_disabled(capsys):
+    from geoassist.logging import configure_logging
+
+    configure_logging("INFO")
+    OutgoingWebhookAdapter("", "GeoAssist", allow_unsigned=True)
+    output = capsys.readouterr().out
+    assert "HMAC DESHABILITADO" in output
+
+
+def test_constructor_is_silent_when_signature_is_enforced(capsys):
+    from geoassist.logging import configure_logging
+
+    configure_logging("INFO")
+    OutgoingWebhookAdapter(SECRET, "GeoAssist", allow_unsigned=True)
+    OutgoingWebhookAdapter("", "GeoAssist")
+    output = capsys.readouterr().out
+    assert "DESHABILITADO" not in output
+
+
 def test_skip_logs_warning_about_unverified_hmac(capsys):
     from geoassist.logging import configure_logging
 

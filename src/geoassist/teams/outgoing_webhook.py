@@ -33,6 +33,11 @@ class OutgoingWebhookAdapter:
         # Solo para pruebas locales: con secreto vacío y allow_unsigned, verify()
         # no exige firma. En producción (allow_unsigned=False) jamás se salta.
         self._allow_unsigned = allow_unsigned
+        if allow_unsigned and not self._secret:
+            logger.warning(
+                "HMAC DESHABILITADO: APP_ENV=development sin TEAMS_SECURITY_TOKEN; "
+                "el webhook NO valida firmas"
+            )
         self._mention_pattern = re.compile(
             rf"<at>[^<]*{re.escape(bot_name)}[^<]*</at>", re.IGNORECASE
         )
