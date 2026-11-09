@@ -31,6 +31,7 @@ def _build_dependencies(settings: Settings) -> AppDependencies:
     from geoassist.ingest.rules import CorpusRules
     from geoassist.llm.openai_compatible import OpenAICompatibleClient
     from geoassist.rag.apps import build_app_detector
+    from geoassist.rag.rewrite import LocalQueryInterpreter, QueryRewriter
 
     adapter = OutgoingWebhookAdapter(
         settings.teams_security_token.get_secret_value(),
@@ -63,6 +64,13 @@ def _build_dependencies(settings: Settings) -> AppDependencies:
         settings.llm_api_key.get_secret_value(),
         settings.llm_model,
     )
+    interpreter = LocalQueryInterpreter(rules.aliases(), reader.vocabulary())
+    rewriter = QueryRewriter(
+        llm,
+        enabled=settings.query_rewrite_enabled,
+        cache_size=settings.query_rewrite_cache,
+        timeout_s=settings.query_rewrite_timeout_ms / 1000.0,
+    )
     chat = ChatService(
         state,
         retriever,
@@ -70,6 +78,9 @@ def _build_dependencies(settings: Settings) -> AppDependencies:
         detector,
         session_ttl_minutes=settings.session_ttl_minutes,
         max_llm_ms=settings.llm_timeout_ms,
+        interpreter=interpreter,
+        rewriter=rewriter,
+        total_budget_ms=settings.total_budget_ms,
     )
 
     return AppDependencies(

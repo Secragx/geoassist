@@ -12,8 +12,38 @@ from geoassist.ingest.rules import normalize_text
 from geoassist.rag.lexical import build_fts_query
 
 _VOCAB_STOPWORDS = frozenset(
-    "de la el los las para por con una un que del al como mas esta este "
-    "desde sobre entre cuando puede debe no si o y e u a".split()
+    [
+        "de",
+        "la",
+        "el",
+        "los",
+        "las",
+        "para",
+        "por",
+        "con",
+        "una",
+        "un",
+        "que",
+        "del",
+        "al",
+        "como",
+        "mas",
+        "esta",
+        "este",
+        "desde",
+        "sobre",
+        "entre",
+        "cuando",
+        "puede",
+        "debe",
+        "no",
+        "si",
+        "o",
+        "y",
+        "e",
+        "u",
+        "a",
+    ]
 )
 _VOCAB_MIN_LEN = 4
 _VOCAB_MAX_TERMS = 2000

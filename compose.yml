@@ -39,6 +39,8 @@ services:
       MANUALS_DIR: /manuals
     volumes:
       - geoassist_data:/data
+      # La jerga/alias de config se ajusta sin reconstruir la imagen.
+      - ./config:/app/config:ro
     ports:
       # Entrada solo-local para el túnel ngrok del host (puerto 9000).
       # Caddy (prod) o ngrok (dev) siguen siendo la exposición pública.
@@ -82,6 +84,8 @@ services:
       - geoassist_manuals:/manuals
       # Manuales locales del host; git clona desde aquí (sin GitHub).
       - ../manuales_soporte_L2:/manuals_src:ro
+      # La jerga/alias de config se ajusta sin reconstruir la imagen.
+      - ./config:/app/config:ro
     networks:
       - internal
     # Sin puertos publicados: la sincronización es un trabajo batch.

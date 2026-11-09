@@ -7,13 +7,16 @@ ignore:
 apps:
   - match: "GEOINVENTARIOS"
     app: geoinventarios
+    aliases: ["inventario", "inventarios", "inventary"]
   - match: "GEOPRICER"
     app: geopricer
-    aliases: ["geoprice", "geopricer"]
+    aliases: ["geoprice", "geopricer", "price", "pricer"]
   - match: "GEOPOS"
     app: geopos
+    aliases: ["geoconsola", "consola", "pos"]
   - match: "GEOPROMOTION"
     app: geopromotion
+    aliases: ["promocion", "promociones", "promo"]
 
 status:
   - match: "VERSIONES POR APROBAR"

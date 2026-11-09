@@ -84,6 +84,10 @@ Copiar `.env.example` a `.env`. En `APP_ENV=production` la aplicación es
 | `ASSETS_ROOT_REL` | `data_source/assets` | No | Subruta de imágenes |
 | `SESSION_TTL_MINUTES` | `120` | No | TTL de sesión en minutos |
 | `RATE_LIMIT_PER_MINUTE` | `6` | No | Límite de mensajes por usuario |
+| `QUERY_REWRITE_ENABLED` | `false` | No | Reformula la consulta con el LLM antes de buscar |
+| `QUERY_REWRITE_CACHE` | `128` | No | Entradas de cache del reescritor |
+| `QUERY_REWRITE_TIMEOUT_MS` | `1200` | No | Timeout del reescritor (fallback automático) |
+| `TOTAL_BUDGET_MS` | `8000` | No | Presupuesto total del pipeline (búsqueda 20 %, generación 65 %, estado 10 %) |
 | `DEBUG_RETRIEVAL` | `false` | No | Activa `/internal/retrieval` |
 | `DEBUG_TOKEN` | — | Si debug | Token del endpoint interno |
 | `LOG_QUESTION_TEXT` | `false` | No | Loguear texto de preguntas |
