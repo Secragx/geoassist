@@ -125,8 +125,12 @@ def test_interpreter_and_rewriter_feed_retrieval(tmp_path):
     interpreter = RecordingInterpreter("geopos no carga")
     rewriter = RecordingRewriter("geopos no abre ni carga")
     service = ChatService(
-        StateStore(tmp_path / "state.db"), retriever, llm, FakeDetector(),
-        interpreter=interpreter, rewriter=rewriter,
+        StateStore(tmp_path / "state.db"),
+        retriever,
+        llm,
+        FakeDetector(),
+        interpreter=interpreter,
+        rewriter=rewriter,
     )
     service.handle(MESSAGE)
     assert interpreter.seen == MESSAGE.text
@@ -139,7 +143,10 @@ def test_generation_receives_original_question_not_rewrite(tmp_path):
     result = RetrievalResult((CHUNK,), True, None, {})
     rewriter = RecordingRewriter("consulta inyectada")
     service = ChatService(
-        StateStore(tmp_path / "state.db"), FakeRetriever(result), llm, FakeDetector(),
+        StateStore(tmp_path / "state.db"),
+        FakeRetriever(result),
+        llm,
+        FakeDetector(),
         rewriter=rewriter,
     )
     service.handle(MESSAGE)
@@ -152,8 +159,12 @@ def test_budget_split_follows_total_budget_ms(tmp_path):
     llm = FakeLLM()
     result = RetrievalResult((CHUNK,), True, None, {})
     service = ChatService(
-        StateStore(tmp_path / "state.db"), FakeRetriever(result), llm, FakeDetector(),
-        max_llm_ms=100_000, total_budget_ms=2000,
+        StateStore(tmp_path / "state.db"),
+        FakeRetriever(result),
+        llm,
+        FakeDetector(),
+        max_llm_ms=100_000,
+        total_budget_ms=2000,
     )
     service.handle(MESSAGE)
     # generación = 65 % de 2000 = 1300 ms
@@ -165,3 +176,19 @@ def test_generation_asks_for_long_enriched_answers(tmp_path):
     result = RetrievalResult((CHUNK,), True, None, {})
     make_service(tmp_path, result, llm).handle(MESSAGE)
     assert llm.last_max_tokens == 500
+
+
+def test_generation_receives_interpreted_question(tmp_path):
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    interpreter = RecordingInterpreter("geopos no carga")
+    service = ChatService(
+        StateStore(tmp_path / "state.db"),
+        FakeRetriever(result),
+        llm,
+        FakeDetector(),
+        interpreter=interpreter,
+    )
+    service.handle(MESSAGE)
+    user_msgs = [m["content"] for m in llm.messages if m["role"] == "user"]
+    assert any("geopos no carga" in m for m in user_msgs)

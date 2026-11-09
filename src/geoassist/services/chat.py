@@ -157,7 +157,7 @@ class ChatService:
                 latency_ms=_elapsed_ms(start, self._clock()),
             )
 
-        messages = build_messages(message.text, session.history, result.chunks)
+        messages = build_messages(interpreted, session.history, result.chunks)
         generation_deadline = Deadline(self._generation_budget_ms, self._clock)
         llm_timeout_ms = min(self._max_llm_ms, generation_deadline.remaining_ms())
         llm_timeout_s = max(0.0, llm_timeout_ms / 1000.0)

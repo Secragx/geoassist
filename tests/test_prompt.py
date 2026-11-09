@@ -53,3 +53,11 @@ def test_system_prompt_requests_complete_enriched_procedures():
     assert "completo" in lowered
     assert "todos los pasos" in lowered
     assert "4-5 oraciones" not in lowered
+
+
+def test_system_prompt_maps_coloquial_names_and_answers_partial_context():
+    from geoassist.rag.prompt import SYSTEM_PROMPT
+
+    lowered = SYSTEM_PROMPT.lower()
+    assert "coloquial" in lowered
+    assert "parcial" in lowered
