@@ -39,6 +39,10 @@ services:
       MANUALS_DIR: /manuals
     volumes:
       - geoassist_data:/data
+    ports:
+      # Entrada solo-local para el túnel ngrok del host (puerto 9000).
+      # Caddy (prod) o ngrok (dev) siguen siendo la exposición pública.
+      - "127.0.0.1:9000:8000"
     networks:
       - internal
     healthcheck:
@@ -47,7 +51,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    # Sin puertos publicados: solo caddy (prod) o ngrok (dev) exponen la API.
 
   sync:
     image: geoassist-sync:latest
@@ -67,6 +70,8 @@ services:
     volumes:
       - geoassist_data:/data
       - geoassist_manuals:/manuals
+      # Manuales locales del host; git clona desde aquí (sin GitHub).
+      - ../manuales_soporte_L2:/manuals_src:ro
     networks:
       - internal
     # Sin puertos publicados: la sincronización es un trabajo batch.
