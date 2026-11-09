@@ -11,15 +11,30 @@ from __future__ import annotations
 
 import difflib
 import re
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 
 from geoassist.ingest.rules import normalize_text
+from geoassist.models import ChatMessage
 
 MIN_TOKEN_LEN = 4
 ALIAS_CUTOFF = 0.85
 VOCAB_CUTOFF = 0.9
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+REWRITE_PROMPT = (
+    "Reformula la consulta del usuario para buscar en manuales técnicos de "
+    "soporte (GEOPOS, GEOINVENTARIOS, GEOPRICER, GEOPROMOTION). Corrige "
+    "errores de ortografía y traduce nombres coloquiales de productos al "
+    "nombre real. Devuelve SOLO la consulta reformulada en español, "
+    "conservando nombres de sistemas, módulos y términos clave. "
+    "No expliques nada."
+)
+
+_MAX_REWRITE_CHARS = 300
+_REWRITE_MAX_TOKENS = 96
+_HISTORY_TURNS = 2
 
 
 class LocalQueryInterpreter:
@@ -66,3 +81,59 @@ class LocalQueryInterpreter:
             return self._canonical_for(normalized) or token
 
         return _WORD_RE.sub(replace, text)
+
+
+class QueryRewriter:
+    """Reformula la consulta con un LLM, con cache y fallback a la original.
+
+    Nunca lanza: ante cualquier error (timeout, respuesta vacía o
+    sobredimensionada) devuelve la consulta tal cual entró.
+    """
+
+    def __init__(
+        self,
+        llm: object,
+        *,
+        enabled: bool = True,
+        cache_size: int = 128,
+        timeout_s: float = 1.2,
+    ) -> None:
+        self._llm = llm
+        self._enabled = enabled
+        self._cache_size = max(1, cache_size)
+        self._timeout_s = timeout_s
+        self._cache: OrderedDict[str, str] = OrderedDict()
+
+    def rewrite(self, query: str, history: Sequence[ChatMessage]) -> str:
+        """Devuelve la consulta reformulada o la original si algo falla."""
+
+        if not self._enabled:
+            return query
+        cached = self._cache.get(query)
+        if cached is not None:
+            self._cache.move_to_end(query)
+            return cached
+
+        messages: list[dict[str, str]] = [{"role": "system", "content": REWRITE_PROMPT}]
+        for message in list(history)[-_HISTORY_TURNS:]:
+            messages.append({"role": message.role, "content": message.content})
+        messages.append({"role": "user", "content": query})
+
+        try:
+            raw = self._llm.complete(  # type: ignore[attr-defined]
+                messages,
+                timeout_s=self._timeout_s,
+                max_tokens=_REWRITE_MAX_TOKENS,
+            )
+        except Exception:
+            return query
+
+        cleaned = (raw or "").strip().strip('"')
+        rewritten = cleaned.splitlines()[0].strip() if cleaned else ""
+        if not rewritten or len(rewritten) > _MAX_REWRITE_CHARS:
+            return query
+
+        self._cache[query] = rewritten
+        if len(self._cache) > self._cache_size:
+            self._cache.popitem(last=False)
+        return rewritten
