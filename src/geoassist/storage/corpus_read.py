@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from geoassist.ingest.rules import normalize_text
 from geoassist.rag.lexical import build_fts_query
+
+_VOCAB_STOPWORDS = frozenset(
+    "de la el los las para por con una un que del al como mas esta este "
+    "desde sobre entre cuando puede debe no si o y e u a".split()
+)
+_VOCAB_MIN_LEN = 4
+_VOCAB_MAX_TERMS = 2000
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,3 +152,23 @@ class CorpusReader:
             doc_count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
             chunk_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
         return {"documents": int(doc_count), "chunks": int(chunk_count)}
+
+    def vocabulary(self) -> list[str]:
+        """Términos de títulos y headings para corrección local de consultas.
+
+        Normalizados (minúsculas, sin acentos), sin stopwords ni términos
+        cortos, deduplicados, ordenados por frecuencia descendente y acotados
+        a 2000.
+        """
+        counts: dict[str, int] = {}
+        with self._connect() as conn:
+            rows = conn.execute("SELECT title FROM documents").fetchall()
+            rows += conn.execute("SELECT heading FROM chunks").fetchall()
+        for row in rows:
+            for token in re.findall(r"\w+", str(row[0] or "")):
+                term = normalize_text(token)
+                if len(term) < _VOCAB_MIN_LEN or term in _VOCAB_STOPWORDS:
+                    continue
+                counts[term] = counts.get(term, 0) + 1
+        ordered = sorted(counts, key=lambda term: (-counts[term], term))
+        return ordered[:_VOCAB_MAX_TERMS]

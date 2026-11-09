@@ -47,3 +47,19 @@ def test_get_chunks_preserves_requested_order(corpus):
     assert hits
     ids = [hit.chunk_row_id for hit in hits]
     assert [chunk.id for chunk in corpus.get_chunks(ids)] == ids
+
+
+def test_vocabulary_contains_titles_and_headings(corpus):
+    vocab = corpus.vocabulary()
+    assert "recepcion" in vocab
+    assert "faltante" in vocab or "mercancia" in vocab
+    assert all(len(term) >= 4 for term in vocab)
+    assert all(term == term.lower() for term in vocab)
+
+
+def test_vocabulary_excludes_stopwords_and_caps_size(corpus):
+    vocab = corpus.vocabulary()
+    assert "para" not in vocab
+    assert "como" not in vocab
+    assert "con" not in vocab
+    assert len(vocab) <= 2000
