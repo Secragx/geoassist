@@ -82,6 +82,7 @@ def _default_dependencies(settings: Settings) -> AppDependencies:
         adapter=OutgoingWebhookAdapter(
             settings.teams_security_token.get_secret_value(),
             settings.teams_bot_name,
+            allow_unsigned=settings.app_env == "development",
         ),
     )
 

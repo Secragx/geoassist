@@ -36,6 +36,35 @@ def test_invalid_or_missing_signature_is_rejected():
         adapter.verify(BODY, {})
 
 
+def test_verify_is_skipped_when_allow_unsigned_and_empty_secret():
+    adapter = OutgoingWebhookAdapter("", "GeoAssist", allow_unsigned=True)
+    adapter.verify(BODY, {})
+    adapter.verify(BODY, {"Authorization": "HMAC bad"})
+
+
+def test_skip_logs_warning_about_unverified_hmac(capsys):
+    from geoassist.logging import configure_logging
+
+    configure_logging("INFO")
+    OutgoingWebhookAdapter("", "GeoAssist", allow_unsigned=True).verify(BODY, {})
+    output = capsys.readouterr().out
+    assert "HMAC" in output
+    assert "no validado" in output
+
+
+def test_verify_still_enforced_with_secret_in_unsigned_mode():
+    adapter = OutgoingWebhookAdapter(SECRET, "GeoAssist", allow_unsigned=True)
+    with pytest.raises(TeamsAuthError):
+        adapter.verify(BODY, {})
+    adapter.verify(BODY, {"Authorization": signature()})
+
+
+def test_verify_enforced_without_unsigned_mode_even_with_empty_secret():
+    adapter = OutgoingWebhookAdapter("", "GeoAssist")
+    with pytest.raises(TeamsAuthError):
+        adapter.verify(BODY, {})
+
+
 def test_parse_strips_mention_and_extracts_fields():
     message = OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(BODY)
     assert message.text == "¿Cómo confirmo una remesa?"

@@ -35,6 +35,7 @@ def _build_dependencies(settings: Settings) -> AppDependencies:
     adapter = OutgoingWebhookAdapter(
         settings.teams_security_token.get_secret_value(),
         settings.teams_bot_name,
+        allow_unsigned=settings.app_env == "development",
     )
     state = StateStore(
         settings.data_dir / "state.db",

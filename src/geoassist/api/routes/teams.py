@@ -32,7 +32,10 @@ def _get_rate_limiter(request: Request) -> RateLimiter:
     return limiter
 
 
+# "/webhook" es un alias para el outgoing webhook ya registrado en Teams con la
+# ruta legada; ambos llegan al mismo handler.
 @router.post("/teams/webhook", response_model=None)
+@router.post("/webhook", response_model=None)
 async def teams_webhook(
     request: Request,
     deps: AppDependencies = Depends(_get_dependencies),  # noqa: B008

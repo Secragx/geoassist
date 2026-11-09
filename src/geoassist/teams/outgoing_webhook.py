@@ -11,8 +11,11 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from geoassist.logging import get_logger
 from geoassist.models import InboundMessage
 from geoassist.teams.base import InvalidPayload, TeamsAuthError
+
+logger = get_logger(__name__)
 
 
 def _require_dict(value: Any, name: str) -> dict[Any, Any]:
@@ -24,9 +27,12 @@ def _require_dict(value: Any, name: str) -> dict[Any, Any]:
 class OutgoingWebhookAdapter:
     """Valida, parsea y formatea mensajes de un webhook saliente de Teams."""
 
-    def __init__(self, secret: str, bot_name: str) -> None:
+    def __init__(self, secret: str, bot_name: str, *, allow_unsigned: bool = False) -> None:
         self._secret = secret.encode()
         self._bot_name = bot_name
+        # Solo para pruebas locales: con secreto vacío y allow_unsigned, verify()
+        # no exige firma. En producción (allow_unsigned=False) jamás se salta.
+        self._allow_unsigned = allow_unsigned
         self._mention_pattern = re.compile(
             rf"<at>[^<]*{re.escape(bot_name)}[^<]*</at>", re.IGNORECASE
         )
@@ -37,6 +43,10 @@ class OutgoingWebhookAdapter:
         Raises:
             TeamsAuthError: Si falta la cabecera o la firma no coincide.
         """
+        if self._allow_unsigned and not self._secret:
+            logger.warning("HMAC no validado: modo desarrollo sin TEAMS_SECURITY_TOKEN")
+            return
+
         auth_header = headers.get("Authorization", "")
         if not auth_header.startswith("HMAC "):
             raise TeamsAuthError("Missing or malformed Authorization header")
