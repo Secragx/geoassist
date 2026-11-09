@@ -29,6 +29,10 @@ _BUFFER_BUDGET_MS = (
 
 _MAX_LLM_MS = 2500
 
+# Generación acotada al presupuesto: con ~130-150 tok/s más ~0.8 s de primer
+# token, 180 tokens terminan por debajo del deadline de generación (2.475 s).
+_MAX_COMPLETION_TOKENS = 180
+
 _ABSTENTION_MESSAGE = (
     "No encontré información relevante para responder. "
     "Intenta reformular la pregunta o contacta a soporte."
@@ -81,6 +85,7 @@ class ChatService:
         *,
         clock: Callable[[], float] = time.monotonic,
         session_ttl_minutes: int = 120,
+        max_llm_ms: int = _MAX_LLM_MS,
     ) -> None:
         self._state = state
         self._retriever = retriever
@@ -88,6 +93,7 @@ class ChatService:
         self._detector = detector
         self._clock = clock
         self._session_ttl_minutes = session_ttl_minutes
+        self._max_llm_ms = max_llm_ms
 
     def handle(self, message: InboundMessage) -> ChatOutcome:
         """Resuelve una pregunta y devuelve la respuesta con metadatos."""
@@ -135,14 +141,14 @@ class ChatService:
 
         messages = build_messages(message.text, session.history, result.chunks)
         generation_deadline = Deadline(_GENERATION_BUDGET_MS, self._clock)
-        llm_timeout_ms = min(_MAX_LLM_MS, generation_deadline.remaining_ms())
+        llm_timeout_ms = min(self._max_llm_ms, generation_deadline.remaining_ms())
         llm_timeout_s = max(0.0, llm_timeout_ms / 1000.0)
 
         try:
             answer = self._llm.complete(
                 messages,
                 timeout_s=llm_timeout_s,
-                max_tokens=500,
+                max_tokens=_MAX_COMPLETION_TOKENS,
                 temperature=0.1,
             )
             degraded = False

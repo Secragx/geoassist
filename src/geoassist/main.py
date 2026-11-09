@@ -69,6 +69,7 @@ def _build_dependencies(settings: Settings) -> AppDependencies:
         llm,
         detector,
         session_ttl_minutes=settings.session_ttl_minutes,
+        max_llm_ms=settings.llm_timeout_ms,
     )
 
     return AppDependencies(

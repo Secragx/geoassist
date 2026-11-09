@@ -44,3 +44,11 @@ def test_fallback_mentions_reason_and_top_chunk():
     text = build_fallback([CHUNK], "low_score")
     assert "no pude generar" in text.lower()
     assert "Manual" in text
+
+
+def test_system_prompt_requests_brief_answers():
+    from geoassist.rag.prompt import SYSTEM_PROMPT
+
+    lowered = SYSTEM_PROMPT.lower()
+    assert "breve" in lowered
+    assert "oraciones" in lowered

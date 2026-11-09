@@ -28,10 +28,14 @@ class FakeLLM:
         self.error = error
         self.calls = 0
         self.messages = None
+        self.last_timeout_s = None
+        self.last_max_tokens = None
 
     def complete(self, messages, *, timeout_s, max_tokens=500, temperature=0.1):
         self.calls += 1
         self.messages = messages
+        self.last_timeout_s = timeout_s
+        self.last_max_tokens = max_tokens
         if self.error:
             raise self.error
         return self.answer
@@ -75,3 +79,28 @@ def test_second_turn_sends_history_to_llm(tmp_path):
     service.handle(InboundMessage("act-2", "otra", "u1", "c1", "t1", None))
     roles = [m["role"] for m in llm.messages]
     assert roles[1:3] == ["user", "assistant"]
+
+
+def test_generation_caps_completion_tokens_to_fit_budget(tmp_path):
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    make_service(tmp_path, result, llm).handle(MESSAGE)
+    assert llm.last_max_tokens is not None
+    assert llm.last_max_tokens <= 200
+
+
+def test_llm_timeout_follows_service_configuration(tmp_path):
+    from geoassist.services.chat import ChatService
+
+    llm = FakeLLM()
+    result = RetrievalResult((CHUNK,), True, None, {})
+    service = ChatService(
+        StateStore(tmp_path / "state.db"),
+        FakeRetriever(result),
+        llm,
+        FakeDetector(),
+        max_llm_ms=1200,
+    )
+    service.handle(MESSAGE)
+    assert llm.last_timeout_s is not None
+    assert llm.last_timeout_s <= 1.2
