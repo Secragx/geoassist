@@ -4,7 +4,7 @@ COMPOSE ?= docker compose
 UV ?= uv
 VERSION ?= 1.0.0
 
-.PHONY: build up down logs test lint check eval shell db publish-models sync sync-status activate
+.PHONY: build up up-dev down logs test lint check eval shell db publish-models sync sync-status activate
 
 ## Construye la imagen de la API con el artefacto de modelos verificado.
 build:
@@ -13,6 +13,10 @@ build:
 ## Levanta la API; añade COMPOSE_PROFILES=prod o dev para caddy/ngrok.
 up:
 	$(COMPOSE) up -d api
+
+## Levanta API + ngrok persistente (perfil dev, dominio estático en .env).
+up-dev:
+	$(COMPOSE) --profile dev up -d api ngrok
 
 down:
 	$(COMPOSE) down

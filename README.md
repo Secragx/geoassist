@@ -265,3 +265,4 @@ make check   # lint + tests
 - Diseño: [docs/superpowers/specs/2026-11-06-geoassist-rag-design.md](docs/superpowers/specs/2026-11-06-geoassist-rag-design.md)
 - Plan: [docs/superpowers/plans/2026-11-06-geoassist-rag.md](docs/superpowers/plans/2026-11-06-geoassist-rag.md)
 - Runbook: [docs/runbook.md](docs/runbook.md)
+- Montaje en servidor: [docs/deploy-server.md](docs/deploy-server.md)
