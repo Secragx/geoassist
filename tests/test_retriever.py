@@ -89,27 +89,91 @@ def test_low_score_abstains():
     assert result.reason == "low_score"
 
 
-def test_max_three_chunks_per_document():
-    class SameDocReader(FakeReader):
+def _doc_chunks_reader(doc_id, only_doc=False):
+    class Reader(FakeReader):
         def get_chunks(self, ids):
-            return [
-                ChunkView(
-                    i, f"d1:{i}", "d1", "H", "texto", "Doc", "1.0", "approved", "geopos", "a.md"
-                )
-                for i in ids
-            ]
+            rows = {}
+            for i in ids:
+                if only_doc or i <= 2:
+                    rows[i] = ChunkView(
+                        i,
+                        f"{doc_id}:{i}",
+                        doc_id,
+                        "H",
+                        "texto",
+                        "Doc",
+                        "1.0",
+                        "approved",
+                        "geopos",
+                        "a.md",
+                    )
+                else:
+                    rows[i] = ChunkView(
+                        i,
+                        f"d2:{i}",
+                        "d2",
+                        "H",
+                        "texto",
+                        "Doc dos",
+                        "1.0",
+                        "approved",
+                        "geopos",
+                        "b.md",
+                    )
+            return [rows[i] for i in ids]
 
+        def lexical_search(self, query, limit, apps=None, statuses=None):
+            return []
+
+    return Reader()
+
+
+def test_winner_case_gets_all_its_candidate_chunks():
     class FiveStore(FakeStore):
         def search(self, vector, limit):
             return [VectorHit(i, 1.0 - i / 10) for i in range(1, 6)]
 
-    class NoLexical(SameDocReader):
-        def lexical_search(self, query, limit, apps=None, statuses=None):
-            return []
-
-    retriever = Retriever(
-        NoLexical(), FiveStore(), FakeEmbedder(), None, max_per_doc=3, final_limit=5
-    )
+    reader = _doc_chunks_reader("d1", only_doc=True)
+    retriever = Retriever(reader, FiveStore(), FakeEmbedder(), None)
     result = retriever.retrieve("consulta")
-    assert len(result.chunks) == 3
+    # El caso ganador llega completo: 5 chunks candidatos, no 3.
+    assert len(result.chunks) == 5
     assert all(chunk.doc_id == "d1" for chunk in result.chunks)
+
+
+def test_winner_case_context_is_capped():
+    class EightStore(FakeStore):
+        def search(self, vector, limit):
+            return [VectorHit(i, 1.0 - i / 20) for i in range(1, 9)]
+
+    reader = _doc_chunks_reader("d1", only_doc=True)
+    retriever = Retriever(reader, EightStore(), FakeEmbedder(), None, max_case_chunks=6)
+    result = retriever.retrieve("consulta")
+    assert len(result.chunks) == 6
+
+
+def test_winner_chunks_are_in_reading_order():
+    class ReversedStore(FakeStore):
+        def search(self, vector, limit):
+            return [VectorHit(3, 0.9), VectorHit(1, 0.8), VectorHit(2, 0.7)]
+
+    reader = _doc_chunks_reader("d1", only_doc=True)
+    retriever = Retriever(reader, ReversedStore(), FakeEmbedder(), None)
+    result = retriever.retrieve("consulta")
+    assert [chunk.id for chunk in result.chunks] == [1, 2, 3]
+
+
+def test_secondary_docs_stay_capped_at_three():
+    class WideStore(FakeStore):
+        def search(self, vector, limit):
+            return [VectorHit(i, 1.0 - i / 20) for i in range(1, 8)]
+
+    reader = _doc_chunks_reader("d1")
+    retriever = Retriever(reader, WideStore(), FakeEmbedder(), None, final_limit=8)
+    result = retriever.retrieve("consulta")
+    per_doc: dict[str, int] = {}
+    for chunk in result.chunks:
+        per_doc[chunk.doc_id] = per_doc.get(chunk.doc_id, 0) + 1
+    assert per_doc["d1"] == 2  # caso ganador completo
+    assert per_doc["d2"] == 3  # secundario acotado
+    assert len(result.chunks) <= 8
