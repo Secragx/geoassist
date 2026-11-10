@@ -180,3 +180,31 @@ def test_malformed_tenant_raises_invalid_payload():
     ).encode()
     with pytest.raises(InvalidPayload):
         OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
+
+
+def test_parse_strips_teams_html_and_entities():
+    body = json.dumps(
+        {
+            "type": "message",
+            "id": "act-2",
+            "text": "<p><at>Chatbot</at>&nbsp;que hacer cuando el geopricer se queda cargando&nbsp;</p>",
+            "from": {"id": "user-1"},
+            "conversation": {"id": "conv-1"},
+        }
+    ).encode()
+    message = OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
+    assert message.text == "que hacer cuando el geopricer se queda cargando"
+
+
+def test_parse_strips_any_at_mention_not_only_bot_name():
+    body = json.dumps(
+        {
+            "type": "message",
+            "id": "act-3",
+            "text": "<at>Otro Nombre</at> hola equipo",
+            "from": {"id": "user-1"},
+            "conversation": {"id": "conv-1"},
+        }
+    ).encode()
+    message = OutgoingWebhookAdapter(SECRET, "GeoAssist").parse(body)
+    assert message.text == "hola equipo"

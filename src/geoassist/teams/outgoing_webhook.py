@@ -6,6 +6,7 @@ import base64
 import binascii
 import hashlib
 import hmac
+import html
 import json
 import re
 from collections.abc import Mapping
@@ -16,6 +17,22 @@ from geoassist.models import InboundMessage
 from geoassist.teams.base import InvalidPayload, TeamsAuthError
 
 logger = get_logger(__name__)
+
+_MENTION_RE = re.compile(r"<at>.*?</at>", re.IGNORECASE | re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_teams_text(text: str) -> str:
+    """Normaliza el texto HTML de Teams a texto plano.
+
+    Quita menciones ``<at>…</at>`` (con cualquier nombre visible), elimina
+    etiquetas HTML y decodifica entidades (``&nbsp;`` etc.) colapsando los
+    espacios. Teams puede enviar el mensaje con formato HTML según el cliente.
+    """
+    without_mentions = _MENTION_RE.sub(" ", text)
+    without_tags = _TAG_RE.sub(" ", without_mentions)
+    unescaped = html.unescape(without_tags).replace("\xa0", " ")
+    return " ".join(unescaped.split())
 
 
 def _require_dict(value: Any, name: str) -> dict[Any, Any]:
@@ -29,6 +46,8 @@ class OutgoingWebhookAdapter:
 
     def __init__(self, secret: str, bot_name: str, *, allow_unsigned: bool = False) -> None:
         self._secret = secret.encode()
+        # bot_name se conserva por compatibilidad; la limpieza de menciones
+        # acepta cualquier nombre (Teams puede mostrar el bot como "Chatbot").
         self._bot_name = bot_name
         # Solo para pruebas locales: con secreto vacío y allow_unsigned, verify()
         # no exige firma. En producción (allow_unsigned=False) jamás se salta.
@@ -38,9 +57,6 @@ class OutgoingWebhookAdapter:
                 "HMAC DESHABILITADO: APP_ENV=development sin TEAMS_SECURITY_TOKEN; "
                 "el webhook NO valida firmas"
             )
-        self._mention_pattern = re.compile(
-            rf"<at>[^<]*{re.escape(bot_name)}[^<]*</at>", re.IGNORECASE
-        )
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> None:
         """Valida la firma HMAC enviada por Teams.
@@ -100,7 +116,7 @@ class OutgoingWebhookAdapter:
         text = payload.get("text")
         if text is None:
             raise InvalidPayload("Missing text")
-        text = self._mention_pattern.sub("", text).strip()
+        text = _clean_teams_text(text)
 
         channel_data = _require_dict(payload.get("channelData", {}), "channelData")
         tenant_payload = _require_dict(channel_data.get("tenant", {}), "channelData.tenant")
