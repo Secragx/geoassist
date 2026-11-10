@@ -28,7 +28,7 @@ class Retriever:
         rerank_top_n: int = 8,
         final_limit: int = 8,
         max_per_doc: int = 3,
-        max_case_chunks: int = 6,
+        max_case_chunks: int = 8,
         min_score: float = 0.0,
     ) -> None:
         self._reader = reader
@@ -104,7 +104,8 @@ class Retriever:
 
         reranked: list[tuple[FusedHit, ChunkView, float | None]] = []
         if self._reranker is not None and limited:
-            to_rerank = limited[: self._rerank_top_n]
+            to_rerank = self._diverse_pool(limited)
+            pool_ids = {chunk.id for _, chunk in to_rerank}
             passages = [chunk.heading + "\n" + chunk.text for _, chunk in to_rerank]
             rerank_scores = self._reranker.score(normalized_question, passages)
             scored = [
@@ -113,8 +114,9 @@ class Retriever:
             ]
             scored.sort(key=lambda item: (-item[2], item[1].id))
             reranked.extend(scored)
-            for hit, chunk in limited[self._rerank_top_n :]:
-                reranked.append((hit, chunk, None))
+            for hit, chunk in limited:
+                if chunk.id not in pool_ids:
+                    reranked.append((hit, chunk, None))
         else:
             for hit, chunk in limited:
                 reranked.append((hit, chunk, None))
@@ -182,6 +184,40 @@ class Retriever:
             trace=trace,
         )
 
+    def _diverse_pool(
+        self,
+        limited: list[tuple[FusedHit, ChunkView]],
+    ) -> list[tuple[FusedHit, ChunkView]]:
+        """Selecciona el pool de rerank cubriendo cada documento antes de repetir.
+
+        Sin esto, los chunks de un documento que inunda el top de fusión
+        desplazan al caso correcto fuera del rerank y nunca se puntúan.
+        """
+        by_doc: dict[str, list[tuple[FusedHit, ChunkView]]] = {}
+        doc_order: list[str] = []
+        for item in limited:
+            doc_id = item[1].doc_id
+            if doc_id not in by_doc:
+                by_doc[doc_id] = []
+                doc_order.append(doc_id)
+            by_doc[doc_id].append(item)
+
+        pool: list[tuple[FusedHit, ChunkView]] = []
+        round_idx = 0
+        while len(pool) < self._rerank_top_n:
+            added = False
+            for doc_id in doc_order:
+                items = by_doc[doc_id]
+                if round_idx < len(items):
+                    pool.append(items[round_idx])
+                    added = True
+                    if len(pool) >= self._rerank_top_n:
+                        break
+            if not added:
+                break
+            round_idx += 1
+        return pool
+
     def _assemble_case_context(
         self,
         final: list[tuple[FusedHit, ChunkView, float | None]],
@@ -189,40 +225,70 @@ class Retriever:
     ) -> list[tuple[FusedHit, ChunkView, float | None]]:
         """Ensambla el contexto a nivel de caso, no de fragmento.
 
-        El documento del caso ganador (top-1 tras rerank) aporta todos sus
-        chunks candidatos en orden de lectura (hasta ``max_case_chunks``), de
-        modo que el detalle no dependa de la frase usada para preguntar. Los
-        documentos secundarios conservan el tope de ``max_per_doc`` y el total
-        se acota a ``final_limit``.
+        El documento del caso ganador (top-1 tras rerank) aporta sus fragmentos
+        candidatos junto con los chunks vecinos de la misma sección (hasta
+        ``max_case_chunks``, en orden de lectura), de modo que el detalle no
+        dependa de la frase usada para preguntar. Los demás documentos aportan
+        como máximo ``max_per_doc`` fragmentos secundarios.
         """
         if not final:
             return []
 
+        winner_chunks = self._winner_context(final, candidates)
+        hit_by_id = {chunk.id: hit for hit, chunk in candidates}
         rerank_by_id = {chunk.id: score for _, chunk, score in final}
-
-        winner_doc_id = final[0][1].doc_id
-        winner = [(hit, chunk) for hit, chunk in candidates if chunk.doc_id == winner_doc_id]
-        winner.sort(key=lambda item: item[1].id)
-        winner = winner[: self._max_case_chunks]
+        fallback_hit = final[0][0]
 
         assembled: list[tuple[FusedHit, ChunkView, float | None]] = [
-            (hit, chunk, rerank_by_id.get(chunk.id)) for hit, chunk in winner
+            (hit_by_id.get(chunk.id, fallback_hit), chunk, rerank_by_id.get(chunk.id))
+            for chunk in winner_chunks
         ]
         seen = {chunk.id for _, chunk, _ in assembled}
 
-        others: dict[str, int] = {}
+        others = 0
         for hit, chunk, score in final:
             if chunk.id in seen:
                 continue
-            count = others.get(chunk.doc_id, 0)
-            if count >= self._max_per_doc:
-                continue
-            others[chunk.doc_id] = count + 1
+            if others >= self._max_per_doc:
+                break
+            others += 1
             assembled.append((hit, chunk, score))
             seen.add(chunk.id)
-            if len(assembled) >= self._final_limit:
-                break
         return assembled
+
+    def _winner_context(
+        self,
+        final: list[tuple[FusedHit, ChunkView, float | None]],
+        candidates: list[tuple[FusedHit, ChunkView]],
+    ) -> list[ChunkView]:
+        """Chunks del caso ganador: candidatos más vecinos de sección.
+
+        Selecciona primero los fragmentos candidatos y luego los chunks más
+        próximos en orden de lectura (la estructura de secciones del chunker
+        agrupa juntos pasos, validaciones y bloques relacionados), acotado a
+        ``max_case_chunks`` y devuelto en orden de lectura.
+        """
+        winner_doc_id = final[0][1].doc_id
+        candidate_chunks = [chunk for _, chunk in candidates if chunk.doc_id == winner_doc_id]
+        candidate_ids = {chunk.id for chunk in candidate_chunks}
+        doc_chunks = self._reader.get_doc_chunks(winner_doc_id) or candidate_chunks
+
+        positions = {chunk.id: idx for idx, chunk in enumerate(doc_chunks)}
+        candidate_positions = [positions[cid] for cid in candidate_ids if cid in positions]
+
+        def rank_key(chunk: ChunkView) -> tuple[int, int, int]:
+            pos = positions.get(chunk.id, 0)
+            if chunk.id in candidate_ids:
+                return (0, 0, pos)
+            # Vecinos derechos primero: la continuidad de un procedimiento
+            # (p. ej. "con lo siguiente QUERY:" y su bloque SQL) va hacia adelante.
+            nearest = min(candidate_positions, key=lambda cp: (abs(pos - cp), -cp))
+            is_left = 1 if pos < nearest else 0
+            return (abs(pos - nearest), is_left, pos)
+
+        chosen = sorted(doc_chunks, key=rank_key)[: self._max_case_chunks]
+        chosen.sort(key=lambda chunk: chunk.id)
+        return chosen
 
     def _best_score(
         self,

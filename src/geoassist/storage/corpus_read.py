@@ -49,6 +49,21 @@ _VOCAB_MIN_LEN = 4
 _VOCAB_MAX_TERMS = 2000
 
 
+def _view_from_row(row: tuple) -> ChunkView:
+    return ChunkView(
+        id=int(row[0]),
+        chunk_id=row[1],
+        doc_id=row[2],
+        heading=row[3] or "",
+        text=row[4],
+        title=row[5],
+        version=row[6],
+        status=row[7],
+        app=row[8],
+        rel_path=row[9],
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ChunkView:
     """Vista combinada de un chunk y los metadatos de su documento."""
@@ -159,21 +174,34 @@ class CorpusReader:
 
         by_id: dict[int, ChunkView] = {}
         for row in rows:
-            view = ChunkView(
-                id=int(row[0]),
-                chunk_id=row[1],
-                doc_id=row[2],
-                heading=row[3] or "",
-                text=row[4],
-                title=row[5],
-                version=row[6],
-                status=row[7],
-                app=row[8],
-                rel_path=row[9],
-            )
+            view = _view_from_row(row)
             by_id[view.id] = view
 
         return [by_id[id] for id in ids if id in by_id]
+
+    def get_doc_chunks(self, doc_id: str) -> list[ChunkView]:
+        """Devuelve todos los chunks de un documento en orden de lectura."""
+
+        sql = """
+            SELECT
+                chunks.id,
+                chunks.chunk_id,
+                chunks.doc_id,
+                chunks.heading,
+                chunks.text,
+                documents.title,
+                documents.version,
+                documents.status,
+                documents.app,
+                documents.rel_path
+            FROM chunks
+            JOIN documents ON documents.doc_id = chunks.doc_id
+            WHERE chunks.doc_id = ?
+            ORDER BY chunks.id
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, [doc_id]).fetchall()
+        return [_view_from_row(row) for row in rows]
 
     def counts(self) -> dict[str, int]:
         """Devuelve el número de documentos y chunks de la versión."""

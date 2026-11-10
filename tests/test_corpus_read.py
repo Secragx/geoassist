@@ -63,3 +63,12 @@ def test_vocabulary_excludes_stopwords_and_caps_size(corpus):
     assert "como" not in vocab
     assert "con" not in vocab
     assert len(vocab) <= 2000
+
+
+def test_get_doc_chunks_returns_document_in_order(corpus):
+    hits = corpus.lexical_search("manual", limit=10)
+    doc_id = corpus.get_chunks([hits[0].chunk_row_id])[0].doc_id
+    doc_chunks = corpus.get_doc_chunks(doc_id)
+    assert doc_chunks
+    assert all(c.doc_id == doc_id for c in doc_chunks)
+    assert [c.id for c in doc_chunks] == sorted(c.id for c in doc_chunks)
