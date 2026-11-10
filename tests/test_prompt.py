@@ -61,3 +61,10 @@ def test_system_prompt_maps_coloquial_names_and_answers_partial_context():
     lowered = SYSTEM_PROMPT.lower()
     assert "coloquial" in lowered
     assert "parcial" in lowered
+
+
+def test_system_prompt_answers_with_symptom_equivalence():
+    from geoassist.rag.prompt import SYSTEM_PROMPT
+
+    assert "síntoma" in SYSTEM_PROMPT
+    assert "Asumiendo" in SYSTEM_PROMPT

@@ -27,9 +27,11 @@ REWRITE_PROMPT = (
     "Reformula la consulta del usuario para buscar en manuales técnicos de "
     "soporte (GEOPOS, GEOINVENTARIOS, GEOPRICER, GEOPROMOTION). Corrige "
     "errores de ortografía y traduce nombres coloquiales de productos al "
-    "nombre real. Devuelve SOLO la consulta reformulada en español, "
-    "conservando nombres de sistemas, módulos y términos clave. "
-    "No expliques nada."
+    "nombre real, y la jerga del negocio a los términos de los manuales "
+    "(cajero = usuario, tienda o sucursal = local, caja = terminal o local, "
+    "devolución de CEDIS = salida a devolución de CEDIS). Devuelve SOLO la "
+    "consulta reformulada en español, conservando números de local, cajero o "
+    "equipo y términos clave. No expliques nada."
 )
 
 _MAX_REWRITE_CHARS = 300

@@ -109,3 +109,12 @@ def test_rewrite_uses_single_attempt():
     llm = RecordingLLM()
     QueryRewriter(llm).rewrite("hola", [])
     assert llm.last["max_attempts"] == 1
+
+
+def test_rewrite_prompt_translates_business_jerga():
+    from geoassist.rag.rewrite import REWRITE_PROMPT
+
+    lowered = REWRITE_PROMPT.lower()
+    assert "cajero" in lowered
+    assert "tienda" in lowered
+    assert "usuario" in lowered
